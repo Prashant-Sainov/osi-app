@@ -36,12 +36,13 @@ export default function OfficerDetail() {
           <div className="profile-avatar">{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
           <h2 className="profile-name">{o.name}</h2>
           <div className="profile-rank">{o.rank}</div>
-          {o.badgeNo && <div className="profile-badge">Badge: {o.badgeNo}</div>}
+          {o.badgeNo && <div className="profile-badge">Belt No: {o.badgeNo}</div>}
         </div>
 
         <div className="section-card">
           <h3 className="section-head">📞 Contact</h3>
           <Row label="Mobile" value={o.mobile} />
+          <Row label="Belt No" value={o.badgeNo} />
           <Row label="Father's Name" value={o.fatherName} />
         </div>
 

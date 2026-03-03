@@ -80,9 +80,9 @@ export default function AddEditOfficer() {
               <input className="field-input" value={form.name}
                 onChange={e => set("name", e.target.value)} placeholder="Enter full name" required />
             </Field>
-            <Field label="Badge / PNO">
+            <Field label="Belt No">
               <input className="field-input" value={form.badgeNo}
-                onChange={e => set("badgeNo", e.target.value)} placeholder="e.g. 1828/HSR" />
+                onChange={e => set("badgeNo", e.target.value)} placeholder="e.g. 1828/HSR (Belt Number)" />
             </Field>
             <Field label="Mobile Number">
               <input className="field-input" type="tel" value={form.mobile}
@@ -134,9 +134,13 @@ export default function AddEditOfficer() {
                 onChange={e => set("subject", e.target.value)} placeholder="Subject (optional)" />
             </Field>
             <Field label="Post Graduation">
-              <Sel value={form.postGrad} onChange={v => set("postGrad", v)}
-                options={["LLM","M.Com","M.Phil","M.Sc","M.Tech","MA","MBA","MCA","PhD"]} />
-            </Field>
+  <Sel value={form.postGrad} onChange={v => set("postGrad", v)}
+    options={["LLM","M.Com","M.Phil","M.Sc","M.Tech","MA","MBA","MCA","PhD"]} />
+</Field>
+<Field label="Post Graduation Subject">
+  <input className="field-input" value={form.subject2}
+    onChange={e => set("subject2", e.target.value)} placeholder="Subject of post graduation" />
+</Field>
           </div>
 
           <div className="section-card">
