@@ -32,18 +32,15 @@ export function DistrictProvider({ user, children }) {
         if (userDoc.exists()) {
           const data = userDoc.data();
           setUserProfile(data);
-          setDistrict(data.district);
+
+          // Initial district assignment
+          if (data.role === "admin") {
+            setDistrict("Overall"); // Admins start with Overall view
+          } else {
+            setDistrict(data.district);
+          }
         } else {
-          // First-time login: create a default user profile
-          const defaultProfile = {
-            email: user.email,
-            district: "Hisar",
-            role: "user",
-            createdAt: new Date().toISOString(),
-          };
-          await setDoc(doc(db, "users", user.uid), defaultProfile);
-          setUserProfile(defaultProfile);
-          setDistrict(defaultProfile.district);
+          setLoading(false); // No profile yet
         }
       } catch (err) {
         console.error("Error fetching user profile:", err);
@@ -69,7 +66,7 @@ export function DistrictProvider({ user, children }) {
       loading,
       isAdmin,
       switchDistrict,
-      allDistricts: ALL_DISTRICTS,
+      allDistricts: ["Overall", ...ALL_DISTRICTS],
     }}>
       {children}
     </DistrictContext.Provider>

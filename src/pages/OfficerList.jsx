@@ -15,6 +15,7 @@ export default function OfficerList() {
   const { district, loading: districtLoading } = useDistrict();
   const [officers, setOfficers] = useState([]);
   const [search, setSearch] = useState("");
+  const [isSearching, setIsSearching] = useState(false); // To track server-side search mode
   const [filterUnit, setFilterUnit] = useState("");
   const [filterRank, setFilterRank] = useState("");
   const [loading, setLoading] = useState(true);
@@ -39,7 +40,7 @@ export default function OfficerList() {
 
   // Fetch stats from district doc
   useEffect(() => {
-    if (!district) return;
+    if (!district || district === "Overall") return;
     getDoc(doc(db, "districts", district)).then(snap => {
       if (snap.exists()) {
         const s = snap.data().stats || {};
@@ -49,10 +50,78 @@ export default function OfficerList() {
     });
   }, [district]);
 
+  // ── SERVER-SIDE SEARCH: Query entire DB for specific field ──
+  const performServerSearch = async (searchTerm) => {
+    if (!district || district === "Overall") return;
+    if (!searchTerm.trim()) {
+      setIsSearching(false);
+      loadPage(false);
+      return;
+    }
+
+    setFilterLoading(true);
+    setIsSearching(true);
+    setOfficers([]);
+
+    try {
+      // We'll search by Name, Mobile, and BadgeNo separately or use 
+      // a combined query if possible. Firestore doesn't support 'contains' well,
+      // so we use simple equality or prefix matches if appropriate, but 
+      // for "all records", we'll try to match name exactly or search for common fields.
+
+      const constraints = [where("district", "==", district)];
+
+      // Note: This is an approximation of full-text search.
+      // We query by Name specifically since it's most common.
+      const q = query(
+        collection(db, "officers"),
+        ...constraints,
+        where("name", ">=", searchTerm),
+        where("name", "<=", searchTerm + "\uf8ff"),
+        limit(100)
+      );
+
+      const snap = await getDocs(q);
+      const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // If name search is empty, try mobile search
+      if (results.length === 0 && /^\d+$/.test(searchTerm)) {
+        const qMobile = query(
+          collection(db, "officers"),
+          where("district", "==", district),
+          where("mobile", "==", searchTerm),
+          limit(50)
+        );
+        const snapMobile = await getDocs(qMobile);
+        setOfficers(snapMobile.docs.map(d => ({ id: d.id, ...d.data() })));
+      } else {
+        setOfficers(results);
+      }
+
+      setHasMore(false);
+    } catch (err) {
+      console.error("Search error:", err);
+    }
+    setFilterLoading(false);
+  };
+
+  // Debounced search trigger
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (search.trim().length > 2) {
+        performServerSearch(search);
+      } else if (search.trim().length === 0 && isSearching) {
+        setIsSearching(false);
+        loadPage(false);
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // ── UNFILTERED: regular paginated load ──
   const loadPage = useCallback(async (isLoadMore = false) => {
-    if (!district) return;
-    if (filterRank || filterUnit || railFilter !== "all") return;
+    if (!district || district === "Overall") return;
+    if (filterRank || filterUnit || railFilter !== "all" || isSearching) return;
 
     if (isLoadMore) {
       setLoadingMore(true);
@@ -90,11 +159,11 @@ export default function OfficerList() {
 
     setLoading(false);
     setLoadingMore(false);
-  }, [district, lastDoc, filterRank, filterUnit, railFilter]);
+  }, [district, lastDoc, filterRank, filterUnit, railFilter, isSearching]);
 
   // ── FILTERED: fetch ALL matching records ──
   const loadFiltered = useCallback(async () => {
-    if (!district) return;
+    if (!district || district === "Overall") return;
     setFilterLoading(true);
     setOfficers([]);
 
@@ -130,7 +199,6 @@ export default function OfficerList() {
       setHasMore(false);
     } catch (err) {
       console.error("Error loading filtered officers:", err);
-      alert("Filter query failed. Check browser console for a Firestore index link and click it.");
     }
 
     setFilterLoading(false);
@@ -138,33 +206,24 @@ export default function OfficerList() {
 
   // Reload on district change (unfiltered)
   useEffect(() => {
-    if (!districtLoading && district && !filterRank && !filterUnit && railFilter === "all") {
+    if (!districtLoading && district && district !== "Overall" && !filterRank && !filterUnit && railFilter === "all" && !isSearching) {
       loadPage(false);
     }
   }, [district, districtLoading]);
 
   // Trigger filtered load when any filter changes
   useEffect(() => {
-    if (!districtLoading && district) {
+    if (!districtLoading && district && district !== "Overall") {
       if (filterRank || filterUnit || railFilter !== "all") {
+        setIsSearching(false); // Stop text search if filter is toggled
         loadFiltered();
-      } else {
+      } else if (!isSearching) {
         setLastDoc(null);
         setHasMore(true);
         loadPage(false);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterRank, filterUnit, railFilter, district, districtLoading]);
-
-  // Client-side text search
-  const filtered = officers.filter(o => {
-    const q = search.toLowerCase();
-    return !q ||
-      o.name?.toLowerCase().includes(q) ||
-      o.badgeNo?.toLowerCase().includes(q) ||
-      o.mobile?.toString().includes(q);
-  });
 
   const deleteOfficer = async (id, name) => {
     if (window.confirm(`Delete officer ${name}?`)) {
@@ -174,7 +233,7 @@ export default function OfficerList() {
         await updateDoc(doc(db, "districts", district), {
           "stats.total": increment(-1),
         });
-      } catch (e) { /* stats update non-critical */ }
+      } catch (e) { }
     }
   };
 
@@ -204,7 +263,7 @@ export default function OfficerList() {
         count: selected.size,
         createdAt: new Date().toISOString(),
       });
-      alert(`List "${listName}" saved with ${selected.size} officers!`);
+      alert(`List "${listName}" saved!`);
       setShowSaveModal(false);
       setListName("");
       cancelSelect();
@@ -214,8 +273,19 @@ export default function OfficerList() {
     setSavingList(false);
   };
 
-  const isFiltering = Boolean(filterRank || filterUnit || railFilter !== "all");
+  const isFiltering = Boolean(filterRank || filterUnit || railFilter !== "all" || isSearching);
   const isLoadingAny = loading || filterLoading;
+
+  if (district === "Overall") {
+    return (
+      <div className="page" style={{ textAlign: 'center', padding: 40 }}>
+        <span style={{ fontSize: 64 }}>🚫</span>
+        <h2 className="page-heading">Detailed List View Unavailable</h2>
+        <p className="page-sub">Admins must select a specific district from the Dashboard to view or manage officer records.</p>
+        <button className="btn-primary" onClick={() => nav("/")} style={{ width: 200, margin: '20px auto' }}>Go Back</button>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -226,168 +296,101 @@ export default function OfficerList() {
           {!selectMode ? (
             <button className="btn-select-mode" onClick={() => setSelectMode(true)}>☑ Select</button>
           ) : (
-            <>
-              <span style={{ color: "rgba(255,255,255,0.9)", fontSize: 13, alignSelf: "center" }}>
-                {selected.size} selected
-              </span>
-              <button className="btn-select-mode active" onClick={cancelSelect}>✕</button>
-            </>
+            <button className="btn-select-mode active" onClick={cancelSelect}>✕</button>
           )}
           <button className="btn-add" onClick={() => nav("/officers/add")}>+ Add</button>
         </div>
       </div>
 
       <div className="officer-page-layout">
-        {/* ── LEFT RAIL ── */}
         <div className="left-rail">
-          <button
-            className={`rail-btn ${railFilter === "all" ? "active" : ""}`}
-            onClick={() => { setRailFilter("all"); setFilterRank(""); setFilterUnit(""); }}
-          >
-            <span className="rail-num">{stats.total}</span>
-            <span className="rail-label">Total</span>
-          </button>
-          <button
-            className={`rail-btn ${railFilter === "male" ? "active" : ""}`}
-            onClick={() => { setRailFilter("male"); }}
-          >
-            <span className="rail-num">{stats.male}</span>
-            <span className="rail-label">Male</span>
-          </button>
-          <button
-            className={`rail-btn ${railFilter === "female" ? "active" : ""}`}
-            onClick={() => { setRailFilter("female"); }}
-          >
-            <span className="rail-num">{stats.female}</span>
-            <span className="rail-label">Female</span>
-          </button>
-          <button
-            className={`rail-btn ${railFilter === "units" ? "active" : ""}`}
-            onClick={() => nav("/")}
-          >
+          {["all", "male", "female"].map(f => (
+            <button key={f}
+              className={`rail-btn ${railFilter === f ? "active" : ""}`}
+              onClick={() => { setRailFilter(f); setFilterRank(""); setFilterUnit(""); setSearch(""); }}
+            >
+              <span className="rail-num">{f === "all" ? stats.total : (f === "male" ? stats.male : stats.female)}</span>
+              <span className="rail-label">{f}</span>
+            </button>
+          ))}
+          <button className="rail-btn" onClick={() => nav("/")}>
             <span className="rail-num">{stats.units}</span>
             <span className="rail-label">Units</span>
           </button>
         </div>
 
-        {/* ── MAIN CONTENT ── */}
         <div className="officer-main">
           <input
             className="search-input"
-            placeholder="🔍  Search by name, badge, mobile..."
+            placeholder="🔍 Type Name or Mobile to search..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
 
           <div className="filter-row">
-            <select className="filter-select" value={filterRank}
-              onChange={e => { setFilterRank(e.target.value); setSearch(""); }}>
+            <select className="filter-select" value={filterRank} onChange={e => setFilterRank(e.target.value)}>
               <option value="">All Ranks</option>
               {DROPDOWNS.rank.map(r => <option key={r}>{r}</option>)}
             </select>
-            <select className="filter-select" value={filterUnit}
-              onChange={e => { setFilterUnit(e.target.value); setSearch(""); }}>
+            <select className="filter-select" value={filterUnit} onChange={e => setFilterUnit(e.target.value)}>
               <option value="">All Units</option>
               {Object.values(DROPDOWNS.unit).flat().map(u => <option key={u}>{u}</option>)}
             </select>
-            {(filterRank || filterUnit) && (
-              <button className="filter-clear-btn" onClick={() => { setFilterRank(""); setFilterUnit(""); }}>
-                ✕ Clear
-              </button>
-            )}
           </div>
 
-          {/* Selection bar */}
           {selectMode && selected.size > 0 && (
             <div className="selection-bar">
-              <span>{selected.size} officer{selected.size > 1 ? "s" : ""} selected</span>
+              <span>{selected.size} selected</span>
               <div className="selection-bar-actions">
-                <button className="btn-save-list" onClick={() => setShowSaveModal(true)}>
-                  💾 Save List
-                </button>
+                <button className="btn-save-list" onClick={() => setShowSaveModal(true)}>💾 Save List</button>
                 <button className="btn-cancel-select" onClick={cancelSelect}>Cancel</button>
               </div>
             </div>
           )}
 
           {isLoadingAny ? (
-            <div className="loading-text">
-              {filterLoading
-                ? `Loading all ${filterRank || (railFilter !== "all" ? railFilter : filterUnit)} records...`
-                : "Loading officers..."}
-            </div>
+            <div className="loading-text">Searching database...</div>
           ) : (
-            <>
-              <div className="officer-list">
-                {filtered.length === 0 && <div className="empty-text">No officers found</div>}
-                {filtered.map(o => (
-                  <div
-                    className={`officer-card ${selectMode && selected.has(o.id) ? "selected" : ""}`}
-                    key={o.id}
-                    onClick={selectMode ? () => toggleSelect(o.id) : undefined}
-                  >
-                    {selectMode && (
-                      <div className={`officer-checkbox ${selected.has(o.id) ? "checked" : ""}`}>
-                        {selected.has(o.id) ? "✓" : ""}
-                      </div>
-                    )}
-                    <div className="officer-avatar">{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
-                    <div className="officer-info" onClick={!selectMode ? () => nav(`/officers/${o.id}`) : undefined}>
-                      <div className="officer-name">{o.name}</div>
-                      <div className="officer-rank">{o.rank} • {o.badgeNo || "—"}</div>
-                      <div className="officer-unit">{o.unit || "No unit assigned"}</div>
-                    </div>
-                    {!selectMode && (
-                      <div className="officer-actions">
-                        <button className="edit-btn" onClick={() => nav(`/officers/edit/${o.id}`)}>✏️</button>
-                        <button className="del-btn" onClick={() => deleteOfficer(o.id, o.name)}>🗑️</button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Load More — only when NOT filtering */}
-              {hasMore && !isFiltering && !search && (
-                <button
-                  className="btn-load-more"
-                  onClick={() => loadPage(true)}
-                  disabled={loadingMore}
+            <div className="officer-list">
+              {officers.length === 0 && <div className="empty-text">No results found for "{search}"</div>}
+              {officers.map(o => (
+                <div
+                  className={`officer-card ${selectMode && selected.has(o.id) ? "selected" : ""}`}
+                  key={o.id}
+                  onClick={selectMode ? () => toggleSelect(o.id) : undefined}
                 >
-                  {loadingMore ? "Loading..." : "Load More Officers"}
+                  {selectMode && (
+                    <div className={`officer-checkbox ${selected.has(o.id) ? "checked" : ""}`}>
+                      {selected.has(o.id) ? "✓" : ""}
+                    </div>
+                  )}
+                  <div className="officer-avatar">{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
+                  <div className="officer-info" onClick={!selectMode ? () => nav(`/officers/${o.id}`) : undefined}>
+                    <div className="officer-name">{o.name}</div>
+                    <div className="officer-rank">{o.rank} • {o.badgeNo || "—"}</div>
+                    <div className="officer-unit">{o.unit}</div>
+                  </div>
+                </div>
+              ))}
+
+              {hasMore && !isFiltering && (
+                <button className="btn-load-more" onClick={() => loadPage(true)} disabled={loadingMore}>
+                  {loadingMore ? "Loading..." : "Load More"}
                 </button>
               )}
-
-              <div className="pagination-info">
-                {isFiltering
-                  ? `Showing all ${filtered.length} ${railFilter !== "all" ? railFilter : (filterRank || filterUnit)} records`
-                  : `Showing ${officers.length} of ${totalCount} officers`}
-              </div>
-            </>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── SAVE LIST MODAL ── */}
       {showSaveModal && (
         <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2 className="modal-title">Save Custom List</h2>
-            <p style={{ color: "#5c6e83", fontSize: 13, marginBottom: 12 }}>
-              {selected.size} officer{selected.size > 1 ? "s" : ""} selected
-            </p>
-            <input
-              className="field-input"
-              placeholder="Enter list name (e.g., Night Shift Team)"
-              value={listName}
-              onChange={e => setListName(e.target.value)}
-              autoFocus
-            />
+            <input className="field-input" placeholder="List name..." value={listName} onChange={e => setListName(e.target.value)} autoFocus />
             <div className="modal-actions">
               <button className="modal-btn secondary" onClick={() => setShowSaveModal(false)}>Cancel</button>
-              <button className="modal-btn primary" onClick={saveCustomList} disabled={savingList}>
-                {savingList ? "Saving..." : "Save List"}
-              </button>
+              <button className="modal-btn primary" onClick={saveCustomList}>Save</button>
             </div>
           </div>
         </div>

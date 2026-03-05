@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-    collection, getDocs, doc, setDoc, deleteDoc, updateDoc
+    collection, getDocs, doc, setDoc, deleteDoc, updateDoc, query, where
 } from "firebase/firestore";
-import {
-    createUserWithEmailAndPassword, getAuth
-} from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { useDistrict, ALL_DISTRICTS } from "../DistrictContext";
@@ -12,13 +9,9 @@ import { useDistrict, ALL_DISTRICTS } from "../DistrictContext";
 export default function AdminUsers() {
     const { isAdmin } = useDistrict();
     const [users, setUsers] = useState([]);
+    const [pendingUsers, setPendingUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showAdd, setShowAdd] = useState(false);
-    const [newEmail, setNewEmail] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [newDistrict, setNewDistrict] = useState("Hisar");
-    const [newRole, setNewRole] = useState("user");
-    const [creating, setCreating] = useState(false);
+    const [tab, setTab] = useState("active"); // "active" | "pending"
     const nav = useNavigate();
 
     useEffect(() => {
@@ -30,58 +23,33 @@ export default function AdminUsers() {
         setLoading(true);
         try {
             const snap = await getDocs(collection(db, "users"));
-            setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+            const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+            setUsers(all.filter(u => u.status !== "pending"));
+            setPendingUsers(all.filter(u => u.status === "pending"));
         } catch (err) {
             console.error("Error loading users:", err);
         }
         setLoading(false);
     };
 
-    const createUser = async () => {
-        if (!newEmail || !newPassword) {
-            alert("Email and password are required"); return;
-        }
-        if (newPassword.length < 6) {
-            alert("Password must be at least 6 characters"); return;
-        }
-        setCreating(true);
+    const approveUser = async (u) => {
+        if (!window.confirm(`Approve registration for ${u.name} (${u.email})?`)) return;
         try {
-            // Note: Creating users from the client side will sign in as the new user.
-            // In a production app, you'd use Firebase Admin SDK on a server.
-            // For now, we'll just create the Firestore user profile document.
-            // The user can then register themselves via the login page.
-
-            // Create user profile in Firestore (they'll register via login page)
-            const userId = `pending_${Date.now()}`;
-            await setDoc(doc(db, "users", userId), {
-                email: newEmail,
-                district: newDistrict,
-                role: newRole,
-                createdAt: new Date().toISOString(),
-                status: "pending_registration",
+            await updateDoc(doc(db, "users", u.uid), {
+                status: "active",
+                role: "user" // Default role on approval
             });
-
-            alert(
-                `User profile created!\n\n` +
-                `Email: ${newEmail}\n` +
-                `District: ${newDistrict}\n` +
-                `Role: ${newRole}\n\n` +
-                `Ask the user to register at the login page with this email. ` +
-                `Their district and role will be automatically assigned.`
-            );
-
-            setNewEmail(""); setNewPassword(""); setShowAdd(false);
+            alert(`User ${u.email} approved! They can now log in.`);
             loadUsers();
         } catch (err) {
-            alert("Error creating user: " + err.message);
+            alert("Error approving user: " + err.message);
         }
-        setCreating(false);
     };
 
     const deleteUser = async (uid, email) => {
-        if (!window.confirm(`Delete user ${email}? This only removes their profile, not their Firebase Auth account.`)) return;
+        if (!window.confirm(`Delete user ${email}?`)) return;
         await deleteDoc(doc(db, "users", uid));
-        setUsers(prev => prev.filter(u => u.uid !== uid));
+        loadUsers();
     };
 
     const changeRole = async (uid, currentRole) => {
@@ -103,87 +71,88 @@ export default function AdminUsers() {
             <div className="topbar">
                 <button className="icon-btn" onClick={() => nav("/")}>← Back</button>
                 <span className="topbar-title">Manage Users</span>
-                <button className="btn-add" onClick={() => setShowAdd(!showAdd)}>
-                    {showAdd ? "✕ Close" : "+ Add User"}
-                </button>
+                <div style={{ width: 40 }} />
             </div>
 
             <div className="page-content">
                 <h2 className="page-heading">👥 User Management</h2>
-                <p className="page-sub">Admin Panel — Manage user accounts and district assignments</p>
 
-                {/* Add User Form */}
-                {showAdd && (
-                    <div className="section-card" style={{ marginBottom: 20 }}>
-                        <h3 className="section-head">➕ Add New User</h3>
-                        <div className="field-group">
-                            <label className="field-label">Email</label>
-                            <input className="field-input" type="email" value={newEmail}
-                                onChange={e => setNewEmail(e.target.value)} placeholder="user@email.com" />
-                        </div>
-                        <div className="field-group">
-                            <label className="field-label">Temporary Password</label>
-                            <input className="field-input" type="text" value={newPassword}
-                                onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
-                        </div>
-                        <div className="field-group">
-                            <label className="field-label">Assign District</label>
-                            <select className="field-input" value={newDistrict}
-                                onChange={e => setNewDistrict(e.target.value)}>
-                                {ALL_DISTRICTS.map(d => <option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div className="field-group">
-                            <label className="field-label">Role</label>
-                            <select className="field-input" value={newRole}
-                                onChange={e => setNewRole(e.target.value)}>
-                                <option value="user">District User</option>
-                                <option value="admin">Admin</option>
-                            </select>
-                        </div>
-                        <button className="btn-save" onClick={createUser} disabled={creating}>
-                            {creating ? "Creating..." : "Create User Profile"}
-                        </button>
-                    </div>
-                )}
+                <div className="filter-row" style={{ marginBottom: 20 }}>
+                    <button
+                        className={`btn-select-mode ${tab === "active" ? "active" : ""}`}
+                        style={{ flex: 1 }}
+                        onClick={() => setTab("active")}
+                    >
+                        Active Users ({users.length})
+                    </button>
+                    <button
+                        className={`btn-select-mode ${tab === "pending" ? "active" : ""}`}
+                        style={{ flex: 1 }}
+                        onClick={() => setTab("pending")}
+                    >
+                        Pending Requests ({pendingUsers.length})
+                    </button>
+                </div>
 
-                {/* User List */}
                 {loading ? (
                     <div className="loading-text">Loading users...</div>
                 ) : (
                     <div>
-                        {users.map(u => (
-                            <div className="admin-user-card" key={u.uid}>
-                                <div style={{ fontSize: 28 }}>👤</div>
-                                <div className="admin-user-info">
-                                    <div className="admin-user-email">{u.email}</div>
-                                    <div className="admin-user-role">
-                                        <span className={`role-badge ${u.role}`}>{u.role}</span>
-                                        <select
-                                            value={u.district || ""}
-                                            onChange={e => changeDistrict(u.uid, e.target.value)}
-                                            style={{
-                                                fontSize: 11, padding: "2px 6px", border: "1px solid #e0e4ea",
-                                                borderRadius: 6, background: "#f8f9fb", color: "#1d2b3e",
-                                                cursor: "pointer"
-                                            }}
-                                        >
-                                            {ALL_DISTRICTS.map(d => <option key={d}>{d}</option>)}
-                                        </select>
-                                        {u.status === "pending_registration" && (
-                                            <span style={{ color: "#d97a1d", fontSize: 10, fontWeight: 700 }}>PENDING</span>
-                                        )}
+                        {tab === "active" ? (
+                            users.length === 0 ? <div className="empty-text">No active users found</div> : (
+                                users.map(u => (
+                                    <div className="admin-user-card" key={u.uid}>
+                                        <div style={{ fontSize: 28 }}>👤</div>
+                                        <div className="admin-user-info">
+                                            <div className="admin-user-email">{u.name || u.email}</div>
+                                            <div className="admin-user-role">
+                                                <span className={`role-badge ${u.role}`}>{u.role}</span>
+                                                <select
+                                                    value={u.district || ""}
+                                                    onChange={e => changeDistrict(u.uid, e.target.value)}
+                                                    className="filter-select"
+                                                    style={{ width: 'auto', padding: '2px 8px', height: 24, fontSize: 11 }}
+                                                >
+                                                    {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+                                                </select>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{u.email}</div>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                            <button className="edit-btn" onClick={() => changeRole(u.uid, u.role)} title="Toggle Admin/User">
+                                                🔄
+                                            </button>
+                                            <button className="del-btn" onClick={() => deleteUser(u.uid, u.email)}>🗑️</button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                                    <button className="edit-btn" onClick={() => changeRole(u.uid, u.role)}
-                                        title={`Switch to ${u.role === "admin" ? "user" : "admin"}`}>
-                                        🔄
-                                    </button>
-                                    <button className="del-btn" onClick={() => deleteUser(u.uid, u.email)}>🗑️</button>
-                                </div>
-                            </div>
-                        ))}
+                                ))
+                            )
+                        ) : (
+                            pendingUsers.length === 0 ? <div className="empty-text">No pending requests</div> : (
+                                pendingUsers.map(u => (
+                                    <div className="admin-user-card" key={u.uid} style={{ borderColor: 'var(--orange)', background: 'var(--orange-bg)' }}>
+                                        <div style={{ fontSize: 28 }}>✋</div>
+                                        <div className="admin-user-info">
+                                            <div className="admin-user-email">{u.name}</div>
+                                            <div className="admin-user-role" style={{ color: 'var(--orange)', fontWeight: 700 }}>
+                                                REQUESTED: {u.district}
+                                            </div>
+                                            <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{u.email} • {u.mobile}</div>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                            <button
+                                                className="btn-save"
+                                                style={{ padding: '6px 12px', fontSize: 12, width: 'auto', marginTop: 0 }}
+                                                onClick={() => approveUser(u)}
+                                            >
+                                                Approve
+                                            </button>
+                                            <button className="del-btn" onClick={() => deleteUser(u.uid, u.email)}>✕</button>
+                                        </div>
+                                    </div>
+                                ))
+                            )
+                        )}
                     </div>
                 )}
             </div>
