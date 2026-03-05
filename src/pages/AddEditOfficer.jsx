@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { collection, addDoc, doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { useNavigate, useParams } from "react-router-dom";
 import { db } from "../firebase";
 import { DROPDOWNS } from "../dropdownData";
+import { useDistrict } from "../DistrictContext";
 
 const Field = ({ label, children }) => (
   <div className="field-group">
@@ -21,6 +22,7 @@ const Sel = ({ value, onChange, options, placeholder }) => (
 export default function AddEditOfficer() {
   const { id } = useParams();
   const nav = useNavigate();
+  const { district } = useDistrict();
   const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -51,9 +53,23 @@ export default function AddEditOfficer() {
       if (isEdit) {
         await updateDoc(doc(db, "officers", id), form);
       } else {
-        await addDoc(collection(db, "officers"), {
-          ...form, createdAt: new Date().toISOString()
-        });
+        // Auto-set district on new officer
+        const officerData = {
+          ...form,
+          district: district,
+          createdAt: new Date().toISOString(),
+        };
+        await addDoc(collection(db, "officers"), officerData);
+
+        // Update district stats (increment total + gender count)
+        const statsUpdate = { "stats.total": increment(1) };
+        if (form.gender === "Male") statsUpdate["stats.male"] = increment(1);
+        if (form.gender === "Female") statsUpdate["stats.female"] = increment(1);
+        try {
+          await updateDoc(doc(db, "districts", district), statsUpdate);
+        } catch (e) {
+          // Stats update failed, non-critical
+        }
       }
       nav("/officers");
     } catch (err) {
@@ -73,6 +89,12 @@ export default function AddEditOfficer() {
       </div>
 
       <div className="page-content">
+        {district && (
+          <div className="district-badge">
+            📍 {district} District
+          </div>
+        )}
+
         <form onSubmit={save}>
           <div className="section-card">
             <h3 className="section-head">👤 Basic Information</h3>
@@ -134,13 +156,13 @@ export default function AddEditOfficer() {
                 onChange={e => set("subject", e.target.value)} placeholder="Subject (optional)" />
             </Field>
             <Field label="Post Graduation">
-  <Sel value={form.postGrad} onChange={v => set("postGrad", v)}
-    options={["LLM","M.Com","M.Phil","M.Sc","M.Tech","MA","MBA","MCA","PhD"]} />
-</Field>
-<Field label="Post Graduation Subject">
-  <input className="field-input" value={form.subject2}
-    onChange={e => set("subject2", e.target.value)} placeholder="Subject of post graduation" />
-</Field>
+              <Sel value={form.postGrad} onChange={v => set("postGrad", v)}
+                options={["LLM", "M.Com", "M.Phil", "M.Sc", "M.Tech", "MA", "MBA", "MCA", "PhD"]} />
+            </Field>
+            <Field label="Post Graduation Subject">
+              <input className="field-input" value={form.subject2}
+                onChange={e => set("subject2", e.target.value)} placeholder="Subject of post graduation" />
+            </Field>
           </div>
 
           <div className="section-card">

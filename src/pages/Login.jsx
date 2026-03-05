@@ -29,7 +29,7 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-badge">🚔</div>
-        <h1 className="login-title">Hisar District Police</h1>
+        <h1 className="login-title">State Police</h1>
         <p className="login-sub">Personnel Management System</p>
 
         <form onSubmit={handle} className="login-form">

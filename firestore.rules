@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: get the current user's district
+    function userDistrict() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.district;
+    }
+
+    // Users collection: users can read/write their own profile
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Officers: users can only access officers in their district
+    match /officers/{officerId} {
+      allow read: if request.auth != null
+                  && resource.data.district == userDistrict();
+      allow create: if request.auth != null
+                    && request.resource.data.district == userDistrict();
+      allow update: if request.auth != null
+                    && resource.data.district == userDistrict()
+                    && request.resource.data.district == userDistrict();
+      allow delete: if request.auth != null
+                    && resource.data.district == userDistrict();
+    }
+
+    // Districts: authenticated users can read any district doc
+    match /districts/{districtId} {
+      allow read: if request.auth != null;
+      // Only admin SDK (server-side scripts) can write district docs
+      allow write: if false;
+    }
+  }
+}

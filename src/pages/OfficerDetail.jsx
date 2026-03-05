@@ -37,6 +37,7 @@ export default function OfficerDetail() {
           <h2 className="profile-name">{o.name}</h2>
           <div className="profile-rank">{o.rank}</div>
           {o.badgeNo && <div className="profile-badge">Belt No: {o.badgeNo}</div>}
+          {o.district && <div className="profile-district">📍 {o.district} District</div>}
         </div>
 
         <div className="section-card">
@@ -69,6 +70,7 @@ export default function OfficerDetail() {
 
         <div className="section-card">
           <h3 className="section-head">📍 Posting</h3>
+          <Row label="District" value={o.district} />
           <Row label="Type of Unit" value={o.typeOfUnit} />
           <Row label="Unit" value={o.unit} />
           <Row label="Sub Unit" value={o.subUnit} />
