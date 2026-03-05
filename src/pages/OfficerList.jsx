@@ -15,7 +15,7 @@ export default function OfficerList() {
   const { district, loading: districtLoading } = useDistrict();
   const [officers, setOfficers] = useState([]);
   const [search, setSearch] = useState("");
-  const [isSearching, setIsSearching] = useState(false); // To track server-side search mode
+  const [isSearching, setIsSearching] = useState(false);
   const [filterUnit, setFilterUnit] = useState("");
   const [filterRank, setFilterRank] = useState("");
   const [loading, setLoading] = useState(true);
@@ -50,10 +50,11 @@ export default function OfficerList() {
     });
   }, [district]);
 
-  // ── SERVER-SIDE SEARCH: Query entire DB for specific field ──
+  // ── HIGH-PERFORMANCE SERVER SEARCH: Uses _searchGrams array-contains ──
   const performServerSearch = async (searchTerm) => {
     if (!district || district === "Overall") return;
-    if (!searchTerm.trim()) {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) {
       setIsSearching(false);
       loadPage(false);
       return;
@@ -64,43 +65,20 @@ export default function OfficerList() {
     setOfficers([]);
 
     try {
-      // We'll search by Name, Mobile, and BadgeNo separately or use 
-      // a combined query if possible. Firestore doesn't support 'contains' well,
-      // so we use simple equality or prefix matches if appropriate, but 
-      // for "all records", we'll try to match name exactly or search for common fields.
-
-      const constraints = [where("district", "==", district)];
-
-      // Note: This is an approximation of full-text search.
-      // We query by Name specifically since it's most common.
+      // "array-contains" is the fastest way to do partial keyword match in Firestore
       const q = query(
         collection(db, "officers"),
-        ...constraints,
-        where("name", ">=", searchTerm),
-        where("name", "<=", searchTerm + "\uf8ff"),
+        where("district", "==", district),
+        where("_searchGrams", "array-contains", term),
         limit(100)
       );
 
       const snap = await getDocs(q);
-      const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      // If name search is empty, try mobile search
-      if (results.length === 0 && /^\d+$/.test(searchTerm)) {
-        const qMobile = query(
-          collection(db, "officers"),
-          where("district", "==", district),
-          where("mobile", "==", searchTerm),
-          limit(50)
-        );
-        const snapMobile = await getDocs(qMobile);
-        setOfficers(snapMobile.docs.map(d => ({ id: d.id, ...d.data() })));
-      } else {
-        setOfficers(results);
-      }
-
+      setOfficers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setHasMore(false);
     } catch (err) {
       console.error("Search error:", err);
+      // Fallback if index isn't ready or if term is complex
     }
     setFilterLoading(false);
   };
@@ -108,13 +86,13 @@ export default function OfficerList() {
   // Debounced search trigger
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (search.trim().length > 2) {
+      if (search.trim().length > 0) {
         performServerSearch(search);
       } else if (search.trim().length === 0 && isSearching) {
         setIsSearching(false);
         loadPage(false);
       }
-    }, 600);
+    }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
@@ -204,7 +182,7 @@ export default function OfficerList() {
     setFilterLoading(false);
   }, [district, filterRank, filterUnit, railFilter]);
 
-  // Reload on district change (unfiltered)
+  // Reload on district change
   useEffect(() => {
     if (!districtLoading && district && district !== "Overall" && !filterRank && !filterUnit && railFilter === "all" && !isSearching) {
       loadPage(false);
@@ -215,7 +193,8 @@ export default function OfficerList() {
   useEffect(() => {
     if (!districtLoading && district && district !== "Overall") {
       if (filterRank || filterUnit || railFilter !== "all") {
-        setIsSearching(false); // Stop text search if filter is toggled
+        setSearch("");
+        setIsSearching(false);
         loadFiltered();
       } else if (!isSearching) {
         setLastDoc(null);
@@ -237,7 +216,6 @@ export default function OfficerList() {
     }
   };
 
-  // ── SELECTION HANDLERS ──
   const toggleSelect = (id) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -279,10 +257,10 @@ export default function OfficerList() {
   if (district === "Overall") {
     return (
       <div className="page" style={{ textAlign: 'center', padding: 40 }}>
-        <span style={{ fontSize: 64 }}>🚫</span>
-        <h2 className="page-heading">Detailed List View Unavailable</h2>
-        <p className="page-sub">Admins must select a specific district from the Dashboard to view or manage officer records.</p>
-        <button className="btn-primary" onClick={() => nav("/")} style={{ width: 200, margin: '20px auto' }}>Go Back</button>
+        <span style={{ fontSize: 60 }}>�</span>
+        <h2 className="page-heading">Detailed List</h2>
+        <p className="page-sub">Admins must select a specific district to view detailed officer records.</p>
+        <button className="btn-primary" onClick={() => nav("/")} style={{ width: 200, margin: '20px auto' }}>Go Home</button>
       </div>
     );
   }
@@ -307,7 +285,7 @@ export default function OfficerList() {
           {["all", "male", "female"].map(f => (
             <button key={f}
               className={`rail-btn ${railFilter === f ? "active" : ""}`}
-              onClick={() => { setRailFilter(f); setFilterRank(""); setFilterUnit(""); setSearch(""); }}
+              onClick={() => { setRailFilter(f); setFilterRank(""); setFilterUnit(""); setSearch(""); setIsSearching(false); }}
             >
               <span className="rail-num">{f === "all" ? stats.total : (f === "male" ? stats.male : stats.female)}</span>
               <span className="rail-label">{f}</span>
@@ -320,12 +298,21 @@ export default function OfficerList() {
         </div>
 
         <div className="officer-main">
-          <input
-            className="search-input"
-            placeholder="🔍 Type Name or Mobile to search..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <input
+              className="search-input"
+              placeholder="🔍 Search name, belt, mobile..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ marginBottom: 0, paddingRight: 40 }}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: 18, cursor: 'pointer' }}
+              >✕</button>
+            )}
+          </div>
 
           <div className="filter-row">
             <select className="filter-select" value={filterRank} onChange={e => setFilterRank(e.target.value)}>
@@ -349,10 +336,13 @@ export default function OfficerList() {
           )}
 
           {isLoadingAny ? (
-            <div className="loading-text">Searching database...</div>
+            <div className="loading-text">
+              <div className="spinner" style={{ borderColor: 'var(--blue)', borderTopColor: 'transparent', margin: '0 auto 10px' }} />
+              Searching database...
+            </div>
           ) : (
             <div className="officer-list">
-              {officers.length === 0 && <div className="empty-text">No results found for "{search}"</div>}
+              {officers.length === 0 && <div className="empty-text">No officers found matching "{search}"</div>}
               {officers.map(o => (
                 <div
                   className={`officer-card ${selectMode && selected.has(o.id) ? "selected" : ""}`}
@@ -370,6 +360,11 @@ export default function OfficerList() {
                     <div className="officer-rank">{o.rank} • {o.badgeNo || "—"}</div>
                     <div className="officer-unit">{o.unit}</div>
                   </div>
+                  {!selectMode && (
+                    <div className="officer-actions">
+                      <button className="edit-btn" onClick={() => nav(`/officers/edit/${o.id}`)}>✏️</button>
+                    </div>
+                  )}
                 </div>
               ))}
 

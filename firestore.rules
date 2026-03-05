@@ -2,36 +2,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper: get the current user's district
-    function userDistrict() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.district;
+    // Helper: get the current user's profile data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Users collection: users can read/write their own profile
+    // Helper: check if caller is an admin
+    function isAdmin() {
+      return request.auth != null && getUserData().role == 'admin';
+    }
+
+    // Helper: check if caller belongs to a specific district
+    function isDistrict(district) {
+      return request.auth != null && getUserData().district == district;
+    }
+
+    // Users collection
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && request.auth.uid == userId;
+      // Users can read/write their own profile
+      // Admins can read/write ANY profile
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
     }
 
-    // Officers: users can only access officers in their district
+    // Officers collection
     match /officers/{officerId} {
-      allow read: if request.auth != null
-                  && resource.data.district == userDistrict();
-      allow create: if request.auth != null
-                    && request.resource.data.district == userDistrict();
-      allow update: if request.auth != null
-                    && resource.data.district == userDistrict()
-                    && request.resource.data.district == userDistrict();
-      allow delete: if request.auth != null
-                    && resource.data.district == userDistrict();
+      // Admins can do anything
+      // District users can only access their own district's officers
+      allow read, write: if request.auth != null && (
+        isAdmin() || 
+        (resource == null ? request.resource.data.district : resource.data.district) == getUserData().district
+      );
     }
 
-    // Districts: authenticated users can read any district doc
+    // Custom Lists collection
+    match /customLists/{listId} {
+      allow read, write: if request.auth != null && (
+        isAdmin() || 
+        (resource == null ? request.resource.data.district : resource.data.district) == getUserData().district
+      );
+    }
+
+    // Districts collection
     match /districts/{districtId} {
       allow read: if request.auth != null;
-      // Only admin SDK (server-side scripts) can write district docs
-      allow write: if false;
+      // Stats should only be updated by the system or Admins if necessary
+      allow write: if isAdmin();
     }
   }
 }

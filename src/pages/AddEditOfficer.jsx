@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { db } from "../firebase";
 import { DROPDOWNS } from "../dropdownData";
 import { useDistrict } from "../DistrictContext";
+import { generateSearchGrams } from "../utils/search";
 
 const Field = ({ label, children }) => (
   <div className="field-group">
@@ -51,13 +52,18 @@ export default function AddEditOfficer() {
     setSaving(true);
     try {
       if (isEdit) {
-        await updateDoc(doc(db, "officers", id), form);
+        const updateData = {
+          ...form,
+          _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile)
+        };
+        await updateDoc(doc(db, "officers", id), updateData);
       } else {
         // Auto-set district on new officer
         const officerData = {
           ...form,
           district: district,
           createdAt: new Date().toISOString(),
+          _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile)
         };
         await addDoc(collection(db, "officers"), officerData);
 
