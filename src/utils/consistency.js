@@ -1,4 +1,4 @@
-import { collection, query, where, getDocs, writeBatch, doc } from "firebase/shared"; // This might not work if I don't have the firebase/shared
+
 // I'll assume standard firebase/firestore imports in the app
 import { db } from "../firebase";
 import { collection as fireCollection, query as fireQuery, where as fireWhere, getDocs as fireGetDocs, writeBatch as fireWriteBatch, doc as fireDoc } from "firebase/firestore";
