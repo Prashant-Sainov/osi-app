@@ -11,6 +11,7 @@ import OfficerDetail from "./pages/OfficerDetail";
 import CustomLists from "./pages/CustomLists";
 import CustomListDetail from "./pages/CustomListDetail";
 import AdminUsers from "./pages/AdminUsers";
+import UnitList from "./pages/UnitList";
 import "./index.css";
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/lists" element={user ? <CustomLists /> : <Navigate to="/login" />} />
           <Route path="/lists/:id" element={user ? <CustomListDetail /> : <Navigate to="/login" />} />
           <Route path="/admin/users" element={user ? <AdminUsers /> : <Navigate to="/login" />} />
+          <Route path="/units" element={user ? <UnitList /> : <Navigate to="/login" />} />
         </Routes>
       </DistrictProvider>
     </Router>

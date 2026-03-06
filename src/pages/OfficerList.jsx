@@ -4,7 +4,7 @@ import {
   startAfter, getDocs, deleteDoc, doc, getDoc, updateDoc, increment,
   addDoc
 } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { db } from "../firebase";
 import { useDistrict } from "../DistrictContext";
 import { DROPDOWNS } from "../dropdownData";
@@ -37,6 +37,16 @@ export default function OfficerList() {
   const [savingList, setSavingList] = useState(false);
 
   const nav = useNavigate();
+  const loc = useLocation();
+
+  // Read URL params initially (e.g. from UnitList redirection)
+  useEffect(() => {
+    const params = new URLSearchParams(loc.search);
+    const u = params.get("unit");
+    if (u) {
+      setFilterUnit(u);
+    }
+  }, [loc.search]);
 
   // Fetch stats from district doc
   useEffect(() => {
@@ -151,6 +161,7 @@ export default function OfficerList() {
       if (filterUnit) constraints.push(where("unit", "==", filterUnit));
       if (railFilter === "male") constraints.push(where("gender", "==", "Male"));
       if (railFilter === "female") constraints.push(where("gender", "==", "Female"));
+      if (railFilter === "on leave") constraints.push(where("status", "==", "On Leave"));
 
       let allDocs = [];
       let cursor = null;
@@ -282,16 +293,16 @@ export default function OfficerList() {
 
       <div className="officer-page-layout">
         <div className="left-rail">
-          {["all", "male", "female"].map(f => (
+          {["all", "male", "female", "on leave"].map(f => (
             <button key={f}
               className={`rail-btn ${railFilter === f ? "active" : ""}`}
               onClick={() => { setRailFilter(f); setFilterRank(""); setFilterUnit(""); setSearch(""); setIsSearching(false); }}
             >
-              <span className="rail-num">{f === "all" ? stats.total : (f === "male" ? stats.male : stats.female)}</span>
+              <span className="rail-num">{f === "all" ? stats.total : (f === "male" ? stats.male : (f === "female" ? stats.female : "🛌"))}</span>
               <span className="rail-label">{f}</span>
             </button>
           ))}
-          <button className="rail-btn" onClick={() => nav("/")}>
+          <button className="rail-btn" onClick={() => nav("/units")}>
             <span className="rail-num">{stats.units}</span>
             <span className="rail-label">Units</span>
           </button>
@@ -356,7 +367,10 @@ export default function OfficerList() {
                   )}
                   <div className="officer-avatar">{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
                   <div className="officer-info" onClick={!selectMode ? () => nav(`/officers/${o.id}`) : undefined}>
-                    <div className="officer-name">{o.name}</div>
+                    <div className="officer-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {o.name}
+                      {o.status === "On Leave" ? <span className="status-badge on-leave">On Leave</span> : <span className="status-badge active">Active</span>}
+                    </div>
                     <div className="officer-rank">{o.rank} • {o.badgeNo || "—"}</div>
                     <div className="officer-unit">{o.unit}</div>
                   </div>

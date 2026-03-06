@@ -1,35 +1,48 @@
 import { useState, useEffect } from "react";
 import {
-    collection, getDocs, doc, setDoc, deleteDoc, updateDoc, writeBatch
+    collection, getDocs, doc, setDoc, deleteDoc, updateDoc, writeBatch, addDoc, query, where
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { useDistrict, ALL_DISTRICTS } from "../DistrictContext";
 import { generateSearchGrams } from "../utils/search";
+import { updateUnitGlobally, removeUnitGlobally } from "../utils/consistency";
+import { DROPDOWNS } from "../dropdownData";
 
 export default function AdminUsers() {
     const { isAdmin } = useDistrict();
     const [users, setUsers] = useState([]);
     const [pendingUsers, setPendingUsers] = useState([]);
+    const [units, setUnits] = useState([]);
+    const [leaveUsers, setLeaveUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState("active");
+    const [tab, setTab] = useState("active"); // "active", "pending", "units", "leave"
     const [reindexing, setReindexing] = useState(false);
+    const [editingUnit, setEditingUnit] = useState(null);
+    const [unitFilterDist, setUnitFilterDist] = useState("Hisar");
     const nav = useNavigate();
 
     useEffect(() => {
         if (!isAdmin) { nav("/"); return; }
-        loadUsers();
+        loadAllData();
     }, [isAdmin]);
 
-    const loadUsers = async () => {
+    const loadAllData = async () => {
         setLoading(true);
         try {
             const snap = await getDocs(collection(db, "users"));
             const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
             setUsers(all.filter(u => u.status !== "pending"));
             setPendingUsers(all.filter(u => u.status === "pending"));
+
+            const unitSnap = await getDocs(collection(db, "units"));
+            setUnits(unitSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+            const leaveQ = query(collection(db, "officers"), where("status", "==", "On Leave"));
+            const leaveSnap = await getDocs(leaveQ);
+            setLeaveUsers(leaveSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         } catch (err) {
-            console.error("Error loading users:", err);
+            console.error("Error loading data:", err);
         }
         setLoading(false);
     };
@@ -37,37 +50,30 @@ export default function AdminUsers() {
     const approveUser = async (u) => {
         if (!window.confirm(`Approve registration for ${u.name} (${u.email})?`)) return;
         try {
-            await updateDoc(doc(db, "users", u.uid), {
-                status: "active",
-                role: "user"
-            });
+            await updateDoc(doc(db, "users", u.uid), { status: "active", role: "user" });
             alert(`User approved! They can now log in.`);
-            loadUsers();
-        } catch (err) {
-            alert("Error approving user: " + err.message);
-        }
+            loadAllData();
+        } catch (err) { alert("Error approving user: " + err.message); }
     };
 
     const deleteUser = async (uid, email) => {
         if (!window.confirm(`Permanently delete account for ${email}?`)) return;
         try {
             await deleteDoc(doc(db, "users", uid));
-            loadUsers();
-        } catch (err) {
-            console.error("Error deleting user doc:", err);
-        }
+            loadAllData();
+        } catch (err) { console.error("Error deleting user doc:", err); }
     };
 
     const changeRole = async (uid, currentRole) => {
         const newR = currentRole === "admin" ? "user" : "admin";
         if (!window.confirm(`Change role to ${newR}?`)) return;
         await updateDoc(doc(db, "users", uid), { role: newR });
-        loadUsers();
+        loadAllData();
     };
 
     const changeDistrict = async (uid, newDist) => {
         await updateDoc(doc(db, "users", uid), { district: newDist });
-        loadUsers();
+        loadAllData();
     };
 
     const reindexSearch = async () => {
@@ -77,23 +83,52 @@ export default function AdminUsers() {
             const snap = await getDocs(collection(db, "officers"));
             const batch = writeBatch(db);
             let count = 0;
-
             snap.docs.forEach(d => {
                 const data = d.data();
                 const grams = generateSearchGrams(data.name, data.badgeNo, data.mobile);
                 batch.update(doc(db, "officers", d.id), { _searchGrams: grams });
                 count++;
             });
-
             await batch.commit();
             alert(`Successfully re-indexed ${count} officers! Search is now working perfectly.`);
-        } catch (err) {
-            alert("Error re-indexing: " + err.message);
-        }
+        } catch (err) { alert("Error re-indexing: " + err.message); }
         setReindexing(false);
     };
 
+    const saveUnit = async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const name = f.unitName.value.trim();
+        const type = f.unitType.value;
+        const dist = f.unitDistrict.value;
+        if (!name || !type || !dist) return;
+
+        try {
+            if (editingUnit?.id) {
+                await updateDoc(doc(db, "units", editingUnit.id), { name, type, district: dist });
+                if (editingUnit.name !== name) {
+                    await updateUnitGlobally(editingUnit.name, name, dist);
+                }
+            } else {
+                await addDoc(collection(db, "units"), { name, type, district: dist });
+            }
+            setEditingUnit(null);
+            loadAllData();
+        } catch (err) { alert("Error saving unit: " + err.message); }
+    };
+
+    const delUnit = async (id, name, dist) => {
+        if (!window.confirm(`Delete unit "${name}"? This will remove it from all assigned officers.`)) return;
+        try {
+            await deleteDoc(doc(db, "units", id));
+            await removeUnitGlobally(name, dist);
+            loadAllData();
+        } catch (err) { alert("Error deleting unit: " + err.message); }
+    };
+
     if (!isAdmin) return null;
+
+    const filteredUnits = units.filter(u => u.district === unitFilterDist);
 
     return (
         <div className="page">
@@ -104,62 +139,54 @@ export default function AdminUsers() {
             </div>
 
             <div className="page-content">
-                <h2 className="page-heading">User & Data Management</h2>
+                <h2 className="page-heading">System Management</h2>
 
-                <div className="filter-row" style={{ marginBottom: 16 }}>
-                    <button
-                        className={`btn-select-mode ${tab === "active" ? "active" : ""}`}
-                        style={{ flex: 1 }}
-                        onClick={() => setTab("active")}
-                    >
+                <div className="filter-row" style={{ marginBottom: 16, overflowX: 'auto', flexWrap: 'nowrap' }}>
+                    <button className={`btn-select-mode ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")} style={{ flexShrink: 0 }}>
                         Active ({users.length})
                     </button>
-                    <button
-                        className={`btn-select-mode ${tab === "pending" ? "active" : ""}`}
-                        style={{ flex: 1 }}
-                        onClick={() => setTab("pending")}
-                    >
+                    <button className={`btn-select-mode ${tab === "pending" ? "active" : ""}`} onClick={() => setTab("pending")} style={{ flexShrink: 0 }}>
                         Requested ({pendingUsers.length})
+                    </button>
+                    <button className={`btn-select-mode ${tab === "units" ? "active" : ""}`} onClick={() => setTab("units")} style={{ flexShrink: 0 }}>
+                        Units ({units.length})
+                    </button>
+                    <button className={`btn-select-mode ${tab === "leave" ? "active" : ""}`} onClick={() => setTab("leave")} style={{ flexShrink: 0 }}>
+                        On Leave ({leaveUsers.length})
                     </button>
                 </div>
 
-                {tab === "active" && (
-                    <div style={{ marginBottom: 20 }}>
-                        <button className="btn-load-more" onClick={reindexSearch} disabled={reindexing} style={{ color: 'var(--navy)', borderColor: 'var(--navy)', marginBottom: 20 }}>
-                            {reindexing ? "⚙️ Re-calculating Index..." : "🛠️ Repair & Upgrade Search Logic"}
-                        </button>
-                    </div>
-                )}
-
-                {loading ? (
-                    <div className="loading-text">Fetching records...</div>
-                ) : (
+                {loading ? <div className="loading-text">Fetching records...</div> : (
                     <div>
-                        {tab === "active" ? (
-                            users.map(u => (
-                                <div className="admin-user-card" key={u.uid}>
-                                    <div className="admin-user-info">
-                                        <div className="admin-user-email">{u.name || "Police User"}</div>
-                                        <div className="admin-user-role">
-                                            <span className={`role-badge ${u.role}`}>{u.role}</span>
-                                            <select
-                                                value={u.district || ""}
-                                                onChange={e => changeDistrict(u.uid, e.target.value)}
-                                                className="filter-select"
-                                                style={{ width: 'auto', padding: '2px 8px', height: 24, fontSize: 11, background: 'var(--surface2)' }}
-                                            >
-                                                {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
-                                            </select>
-                                        </div>
-                                        <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{u.email}</div>
-                                    </div>
-                                    <div style={{ display: "flex", gap: 10 }}>
-                                        <button className="edit-btn" onClick={() => changeRole(u.uid, u.role)} title="Toggle Admin">🔄</button>
-                                        <button className="del-btn" style={{ color: 'var(--red)' }} onClick={() => deleteUser(u.uid, u.email)}>🗑️</button>
-                                    </div>
+                        {tab === "active" && (
+                            <div>
+                                <div style={{ marginBottom: 20 }}>
+                                    <button className="btn-load-more" onClick={reindexSearch} disabled={reindexing} style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}>
+                                        {reindexing ? "⚙️ Re-calculating Index..." : "🛠️ Repair & Upgrade Search Logic"}
+                                    </button>
                                 </div>
-                            ))
-                        ) : (
+                                {users.map(u => (
+                                    <div className="admin-user-card" key={u.uid}>
+                                        <div className="admin-user-info">
+                                            <div className="admin-user-email">{u.name || "Police User"}</div>
+                                            <div className="admin-user-role">
+                                                <span className={`role-badge ${u.role}`}>{u.role}</span>
+                                                <select value={u.district || ""} onChange={e => changeDistrict(u.uid, e.target.value)} className="filter-select" style={{ width: 'auto', padding: '2px 8px', height: 24, fontSize: 11, background: 'var(--surface2)' }}>
+                                                    {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+                                                </select>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>{u.email}</div>
+                                        </div>
+                                        <div style={{ display: "flex", gap: 10 }}>
+                                            <button className="edit-btn" onClick={() => changeRole(u.uid, u.role)} title="Toggle Admin">🔄</button>
+                                            <button className="del-btn" style={{ color: 'var(--red)' }} onClick={() => deleteUser(u.uid, u.email)}>🗑️</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {tab === "pending" && (
                             pendingUsers.length === 0 ? <div className="empty-text">No pending registrations</div> : (
                                 pendingUsers.map(u => (
                                     <div className="admin-user-card" key={u.uid} style={{ border: '1.5px solid var(--orange)', background: 'white' }}>
@@ -169,18 +196,74 @@ export default function AdminUsers() {
                                             <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{u.email} • {u.mobile}</div>
                                         </div>
                                         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                            <button
-                                                className="btn-add"
-                                                style={{ padding: '8px 16px', fontSize: 13 }}
-                                                onClick={() => approveUser(u)}
-                                            >
-                                                Approve
-                                            </button>
+                                            <button className="btn-add" style={{ padding: '8px 16px', fontSize: 13 }} onClick={() => approveUser(u)}>Approve</button>
                                             <button className="del-btn" style={{ color: 'var(--red)', fontSize: 20 }} onClick={() => deleteUser(u.uid, u.email)}>✕</button>
                                         </div>
                                     </div>
                                 ))
                             )
+                        )}
+
+                        {tab === "units" && (
+                            <div>
+                                <select className="filter-select" value={unitFilterDist} onChange={e => setUnitFilterDist(e.target.value)} style={{ marginBottom: 16, width: '100%' }}>
+                                    {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+
+                                <form onSubmit={saveUnit} className="section-card" style={{ marginBottom: 20 }}>
+                                    <h3 className="section-head">{editingUnit ? "Edit Unit" : "Add New Unit"}</h3>
+                                    <div className="field-group">
+                                        <input className="field-input" name="unitName" defaultValue={editingUnit?.name || ""} placeholder="Unit Name" required />
+                                    </div>
+                                    <div className="field-group">
+                                        <select className="field-input" name="unitType" defaultValue={editingUnit?.type || DROPDOWNS.typeOfUnit[0]}>
+                                            {DROPDOWNS.typeOfUnit.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    <input type="hidden" name="unitDistrict" value={unitFilterDist} />
+                                    <div style={{ display: 'flex', gap: 10 }}>
+                                        <button className="btn-save" type="submit" style={{ flex: 1, padding: 10 }}>
+                                            {editingUnit ? "Save Changes" : "Create Unit"}
+                                        </button>
+                                        {editingUnit && (
+                                            <button className="btn-save" type="button" onClick={() => setEditingUnit(null)} style={{ flex: 1, padding: 10, background: 'var(--surface2)', color: 'var(--text-dim)' }}>
+                                                Cancel
+                                            </button>
+                                        )}
+                                    </div>
+                                </form>
+
+                                <div className="unit-grid">
+                                    {filteredUnits.length === 0 && <div className="empty-text" style={{ gridColumn: '1 / -1' }}>No units in {unitFilterDist}</div>}
+                                    {filteredUnits.map(u => (
+                                        <div className="unit-card" key={u.id}>
+                                            <div className="unit-name">{u.name}</div>
+                                            <div className="unit-type">{u.type}</div>
+                                            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                                                <button className="edit-btn" onClick={() => setEditingUnit(u)}>✏️</button>
+                                                <button className="del-btn" onClick={() => delUnit(u.id, u.name, u.district)} style={{ color: 'var(--red)' }}>🗑️</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === "leave" && (
+                            <div className="officer-list">
+                                {leaveUsers.length === 0 && <div className="empty-text">No active leave records found.</div>}
+                                {leaveUsers.map(o => (
+                                    <div className="officer-card" key={o.id}>
+                                        <div className="officer-avatar">{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
+                                        <div className="officer-info">
+                                            <div className="officer-name">{o.name} <span className="status-badge on-leave">On Leave</span></div>
+                                            <div className="officer-rank">{o.rank} • {o.badgeNo || "—"}</div>
+                                            <div className="officer-unit">{o.unit} ({o.district})</div>
+                                            {o.remarks && <div style={{ fontSize: 10, color: 'var(--orange)', marginTop: 4 }}>Note: {o.remarks}</div>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         )}
                     </div>
                 )}

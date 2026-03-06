@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, addDoc, doc, getDoc, updateDoc, increment } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc, updateDoc, increment, query, where, getDocs } from "firebase/firestore";
 import { useNavigate, useParams } from "react-router-dom";
 import { db } from "../firebase";
 import { DROPDOWNS } from "../dropdownData";
@@ -33,8 +33,24 @@ export default function AddEditOfficer() {
     typeOfUnit: "", unit: "", subUnit: "", role1: "", role2: "",
     homeDistrict: "", village: "", ps: "", education: "",
     subject: "", postGrad: "", subject2: "", fatherName: "",
-    io: "", remarks: "", swatCourse: ""
+    io: "", remarks: "", swatCourse: "", status: "Active"
   });
+
+  const [allUnits, setAllUnits] = useState([]);
+
+  useEffect(() => {
+    if (!district) return;
+    const loadUnits = async () => {
+      try {
+        const q = query(collection(db, "units"), where("district", "==", district));
+        const snap = await getDocs(q);
+        setAllUnits(snap.docs.map(d => d.data()));
+      } catch (err) {
+        console.error("Error loading units", err);
+      }
+    };
+    loadUnits();
+  }, [district]);
 
   useEffect(() => {
     if (isEdit) {
@@ -84,7 +100,9 @@ export default function AddEditOfficer() {
     setSaving(false);
   };
 
-  const unitOptions = form.typeOfUnit ? (DROPDOWNS.unit[form.typeOfUnit] || []) : [];
+  const unitOptions = form.typeOfUnit
+    ? allUnits.filter(u => u.type === form.typeOfUnit).map(u => u.name)
+    : [];
 
   return (
     <div className="page">
@@ -111,6 +129,9 @@ export default function AddEditOfficer() {
             <Field label="Belt No">
               <input className="field-input" value={form.badgeNo}
                 onChange={e => set("badgeNo", e.target.value)} placeholder="e.g. 1828/HSR (Belt Number)" />
+            </Field>
+            <Field label="Status">
+              <Sel value={form.status} onChange={v => set("status", v)} options={["Active", "On Leave"]} />
             </Field>
             <Field label="Mobile Number">
               <input className="field-input" type="tel" value={form.mobile}

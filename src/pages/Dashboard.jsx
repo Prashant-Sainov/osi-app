@@ -87,7 +87,7 @@ export default function Dashboard() {
               <div className="stat-num">{stats.female}</div>
               <div className="stat-label">Female Officers</div>
             </div>
-            <div className="stat-card orange">
+            <div className="stat-card orange" onClick={() => nav("/units")}>
               <div className="stat-num">{stats.units}</div>
               <div className="stat-label">Active Units</div>
             </div>
