@@ -7,7 +7,7 @@ import { useDistrict } from "../DistrictContext";
 
 export default function Dashboard() {
   const { district, loading: districtLoading, isAdmin, switchDistrict, allDistricts } = useDistrict();
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, units: 0 });
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, units: 0, onLeave: 0 });
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
 
@@ -19,21 +19,21 @@ export default function Dashboard() {
       try {
         if (district === "Overall") {
           const snap = await getDocs(collection(db, "districts"));
-          const totals = { total: 0, male: 0, female: 0, units: 0 };
+          const totals = { total: 0, male: 0, female: 0, units: 0, onLeave: 0 };
           snap.docs.forEach(d => {
             const s = d.data().stats || {};
             totals.total += (s.total || 0);
             totals.male += (s.male || 0);
             totals.female += (s.female || 0);
             totals.units += (s.units || 0);
+            totals.onLeave += (s.onLeave || 0);
           });
           setStats(totals);
         } else {
-          const snap = await getDoc(doc(db, "districts", district));
           if (snap.exists()) {
-            setStats(snap.data().stats || { total: 0, male: 0, female: 0, units: 0 });
+            setStats(snap.data().stats || { total: 0, male: 0, female: 0, units: 0, onLeave: 0 });
           } else {
-            setStats({ total: 0, male: 0, female: 0, units: 0 });
+            setStats({ total: 0, male: 0, female: 0, units: 0, onLeave: 0 });
           }
         }
       } catch (err) {

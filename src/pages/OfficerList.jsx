@@ -26,7 +26,7 @@ export default function OfficerList() {
   const [filterLoading, setFilterLoading] = useState(false);
 
   // Stats for the left rail
-  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, units: 0 });
+  const [stats, setStats] = useState({ total: 0, male: 0, female: 0, units: 0, onLeave: 0 });
   const [railFilter, setRailFilter] = useState("all"); // "all" | "male" | "female"
 
   // Selection mode
@@ -298,7 +298,9 @@ export default function OfficerList() {
               className={`rail-btn ${railFilter === f ? "active" : ""}`}
               onClick={() => { setRailFilter(f); setFilterRank(""); setFilterUnit(""); setSearch(""); setIsSearching(false); }}
             >
-              <span className="rail-num">{f === "all" ? stats.total : (f === "male" ? stats.male : (f === "female" ? stats.female : "🛌"))}</span>
+              <span className="rail-num">
+                {f === "all" ? stats.total : (f === "male" ? stats.male : (f === "female" ? stats.female : (stats.onLeave || "🛌")))}
+              </span>
               <span className="rail-label">{f}</span>
             </button>
           ))}

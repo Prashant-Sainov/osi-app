@@ -42,10 +42,15 @@ service cloud.firestore {
       );
     }
 
+    // Units collection
+    match /units/{unitId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // Districts collection
     match /districts/{districtId} {
       allow read: if request.auth != null;
-      // Stats should only be updated by the system or Admins if necessary
       allow write: if isAdmin();
     }
   }

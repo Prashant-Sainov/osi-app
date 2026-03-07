@@ -10,7 +10,7 @@ import { updateUnitGlobally, removeUnitGlobally } from "../utils/consistency";
 import { DROPDOWNS } from "../dropdownData";
 
 export default function AdminUsers() {
-    const { isAdmin } = useDistrict();
+    const { isAdmin, loading: authLoading } = useDistrict();
     const [users, setUsers] = useState([]);
     const [pendingUsers, setPendingUsers] = useState([]);
     const [units, setUnits] = useState([]);
@@ -23,9 +23,14 @@ export default function AdminUsers() {
     const nav = useNavigate();
 
     useEffect(() => {
-        if (!isAdmin) { nav("/"); return; }
+        if (authLoading) return;
+        if (!isAdmin) {
+            console.log("Not an admin, redirecting...");
+            nav("/");
+            return;
+        }
         loadAllData();
-    }, [isAdmin]);
+    }, [isAdmin, authLoading]);
 
     const loadAllData = async () => {
         setLoading(true);
@@ -95,6 +100,74 @@ export default function AdminUsers() {
         setReindexing(false);
     };
 
+    const repairStats = async () => {
+        if (!window.confirm("Recalculate all district statistics (counts)?")) return;
+        setLoading(true);
+        try {
+            const offSnap = await getDocs(collection(db, "officers"));
+            const unitSnap = await getDocs(collection(db, "units"));
+
+            const distStats = {};
+            ALL_DISTRICTS.forEach(d => {
+                distStats[d] = { total: 0, male: 0, female: 0, units: 0, onLeave: 0 };
+            });
+
+            offSnap.docs.forEach(d => {
+                const o = d.data();
+                if (distStats[o.district]) {
+                    distStats[o.district].total++;
+                    if (o.gender === "Male") distStats[o.district].male++;
+                    if (o.gender === "Female") distStats[o.district].female++;
+                    if (o.status === "On Leave") distStats[o.district].onLeave++;
+                }
+            });
+
+            unitSnap.docs.forEach(d => {
+                const u = d.data();
+                if (distStats[u.district]) {
+                    distStats[u.district].units++;
+                }
+            });
+
+            const batch = writeBatch(db);
+            for (const [d, s] of Object.entries(distStats)) {
+                batch.set(doc(db, "districts", d), { stats: s }, { merge: true });
+            }
+            await batch.commit();
+            alert("Statistics repaired successfully!");
+            loadAllData();
+        } catch (err) {
+            alert("Error repairing stats: " + err.message);
+        }
+        setLoading(false);
+    };
+
+    const seedDefaultUnits = async () => {
+        if (!window.confirm("Import default units from the system configuration into the database?")) return;
+        setLoading(true);
+        try {
+            let count = 0;
+            for (const [type, names] of Object.entries(DROPDOWNS.unit)) {
+                for (const name of names) {
+                    await addDoc(collection(db, "units"), {
+                        name,
+                        type,
+                        district: unitFilterDist // Import into selected district
+                    });
+                    count++;
+                }
+            }
+            await updateDoc(doc(db, "districts", unitFilterDist), {
+                "stats.units": increment(count)
+            });
+            alert(`Imported ${count} units into ${unitFilterDist}!`);
+            loadAllData();
+        } catch (err) {
+            alert("Error seeding units: " + err.message);
+        }
+        setLoading(false);
+    };
+
     const saveUnit = async (e) => {
         e.preventDefault();
         const f = e.target;
@@ -111,6 +184,11 @@ export default function AdminUsers() {
                 }
             } else {
                 await addDoc(collection(db, "units"), { name, type, district: dist });
+                try {
+                    await updateDoc(doc(db, "districts", dist), { "stats.units": increment(1) });
+                } catch (e) {
+                    // Districts doc might not exist yet, create it if needed or ignore
+                }
             }
             setEditingUnit(null);
             loadAllData();
@@ -122,6 +200,9 @@ export default function AdminUsers() {
         try {
             await deleteDoc(doc(db, "units", id));
             await removeUnitGlobally(name, dist);
+            try {
+                await updateDoc(doc(db, "districts", dist), { "stats.units": increment(-1) });
+            } catch (e) { }
             loadAllData();
         } catch (err) { alert("Error deleting unit: " + err.message); }
     };
@@ -156,13 +237,16 @@ export default function AdminUsers() {
                     </button>
                 </div>
 
-                {loading ? <div className="loading-text">Fetching records...</div> : (
+                {loading || authLoading ? <div className="loading-text">Fetching records...</div> : (
                     <div>
                         {tab === "active" && (
                             <div>
-                                <div style={{ marginBottom: 20 }}>
-                                    <button className="btn-load-more" onClick={reindexSearch} disabled={reindexing} style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}>
-                                        {reindexing ? "⚙️ Re-calculating Index..." : "🛠️ Repair & Upgrade Search Logic"}
+                                <div style={{ marginBottom: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                    <button className="btn-load-more" onClick={reindexSearch} disabled={reindexing} style={{ flex: 1, color: 'var(--navy)', borderColor: 'var(--navy)' }}>
+                                        {reindexing ? "⚙️ indexing..." : "🛠️ Search Logic"}
+                                    </button>
+                                    <button className="btn-load-more" onClick={repairStats} style={{ flex: 1, color: 'var(--green)', borderColor: 'var(--green)' }}>
+                                        📊 Repair Stats
                                     </button>
                                 </div>
                                 {users.map(u => (
@@ -209,6 +293,13 @@ export default function AdminUsers() {
                                 <select className="filter-select" value={unitFilterDist} onChange={e => setUnitFilterDist(e.target.value)} style={{ marginBottom: 16, width: '100%' }}>
                                     {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
                                 </select>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-dim)' }}>Units in {unitFilterDist}</span>
+                                    <button onClick={seedDefaultUnits} style={{ background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+                                        ⚡ Import All Defaults
+                                    </button>
+                                </div>
 
                                 <form onSubmit={saveUnit} className="section-card" style={{ marginBottom: 20 }}>
                                     <h3 className="section-head">{editingUnit ? "Edit Unit" : "Add New Unit"}</h3>
