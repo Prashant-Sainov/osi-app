@@ -226,8 +226,9 @@ export default function AdminUsers() {
                     <button className={`btn-select-mode ${tab === "active" ? "active" : ""}`} onClick={() => setTab("active")} style={{ flexShrink: 0 }}>
                         Active ({users.length})
                     </button>
-                    <button className={`btn-select-mode ${tab === "pending" ? "active" : ""}`} onClick={() => setTab("pending")} style={{ flexShrink: 0 }}>
+                    <button className={`btn-select-mode ${tab === "pending" ? "active" : ""}`} onClick={() => setTab("pending")} style={{ flexShrink: 0, position: 'relative' }}>
                         Requested ({pendingUsers.length})
+                        {pendingUsers.length > 0 && <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--red)', width: 10, height: 10, borderRadius: '50%', border: '2px solid white' }}></span>}
                     </button>
                     <button className={`btn-select-mode ${tab === "units" ? "active" : ""}`} onClick={() => setTab("units")} style={{ flexShrink: 0 }}>
                         Units ({units.length})
@@ -344,13 +345,20 @@ export default function AdminUsers() {
                             <div className="officer-list">
                                 {leaveUsers.length === 0 && <div className="empty-text">No active leave records found.</div>}
                                 {leaveUsers.map(o => (
-                                    <div className="officer-card" key={o.id}>
-                                        <div className="officer-avatar">{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
+                                    <div className="officer-card" key={o.id} style={{ borderLeft: '4px solid var(--orange)' }}>
+                                        <div className="officer-avatar" style={{ fontSize: 24 }}>{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
                                         <div className="officer-info">
-                                            <div className="officer-name">{o.name} <span className="status-badge on-leave">On Leave</span></div>
+                                            <div className="officer-name">
+                                                {o.name}
+                                                <span style={{ fontSize: 10, background: 'var(--orange-bg)', color: 'var(--orange)', padding: '2px 8px', borderRadius: 10, marginLeft: 8, fontWeight: 700 }}>ON LEAVE</span>
+                                            </div>
                                             <div className="officer-rank">{o.rank} • {o.badgeNo || "—"}</div>
-                                            <div className="officer-unit">{o.unit} ({o.district})</div>
-                                            {o.remarks && <div style={{ fontSize: 10, color: 'var(--orange)', marginTop: 4 }}>Note: {o.remarks}</div>}
+                                            <div className="officer-unit" style={{ color: 'var(--blue)', fontWeight: 600 }}>{o.unit}</div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                                                <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>District: <b>{o.district}</b></div>
+                                                <button onClick={() => nav(`/officers?search=${encodeURIComponent(o.name)}`)} style={{ background: 'none', border: 'none', color: 'var(--blue)', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}>View Details →</button>
+                                            </div>
+                                            {o.remarks && <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 4, background: 'var(--surface2)', padding: '4px 8px', borderRadius: 4 }}>📝 {o.remarks}</div>}
                                         </div>
                                     </div>
                                 ))}
