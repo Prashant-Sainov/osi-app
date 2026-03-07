@@ -43,9 +43,9 @@ export default function OfficerList() {
   useEffect(() => {
     const params = new URLSearchParams(loc.search);
     const u = params.get("unit");
-    if (u) {
-      setFilterUnit(u);
-    }
+    if (u) setFilterUnit(u);
+    const s = params.get("status");
+    if (s === "On Leave") setRailFilter("on leave");
   }, [loc.search]);
 
   // Fetch stats from district doc
@@ -299,7 +299,7 @@ export default function OfficerList() {
               onClick={() => { setRailFilter(f); setFilterRank(""); setFilterUnit(""); setSearch(""); setIsSearching(false); }}
             >
               <span className="rail-num">
-                {f === "all" ? stats.total : (f === "male" ? stats.male : (f === "female" ? stats.female : (stats.onLeave || "🛌")))}
+                {f === "all" ? stats.total : (f === "male" ? stats.male : (f === "female" ? stats.female : (stats.onLeave > 0 ? stats.onLeave : "🛌")))}
               </span>
               <span className="rail-label">{f}</span>
             </button>

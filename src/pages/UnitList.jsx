@@ -18,27 +18,18 @@ export default function UnitList() {
     const loadUnits = async () => {
         setLoading(true);
         try {
-            let q;
-            if (district === "Overall") {
-                q = collection(db, "units");
-            } else {
-                q = query(collection(db, "units"), where("district", "==", district));
-            }
-            const snap = await getDocs(q);
+            // Requirement: "User clicks on Active Units, it should display all active units in the system."
+            // So we always fetch all and group them, rather than filtering by district.
+            const snap = await getDocs(collection(db, "units"));
             const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            // Group by district if Overall
-            if (district === "Overall") {
-                const grouped = items.reduce((acc, unit) => {
-                    const dist = unit.district || "Unknown";
-                    if (!acc[dist]) acc[dist] = [];
-                    acc[dist].push(unit);
-                    return acc;
-                }, {});
-                setUnits(grouped);
-            } else {
-                setUnits(items);
-            }
+            const grouped = items.reduce((acc, unit) => {
+                const dist = unit.district || "Unknown";
+                if (!acc[dist]) acc[dist] = [];
+                acc[dist].push(unit);
+                return acc;
+            }, {});
+            setUnits(grouped);
         } catch (err) {
             console.error("Error loading units:", err);
         }
@@ -61,10 +52,21 @@ export default function UnitList() {
 
                 {loading ? (
                     <div className="loading-text">Loading units...</div>
-                ) : district === "Overall" ? (
-                    Object.entries(units).map(([dist, distUnits]) => (
+                ) : Object.keys(units).length === 0 ? (
+                    <div className="empty-text">No active units found. Please ask an Admin to import or add units.</div>
+                ) : (
+                    Object.entries(units).sort().map(([dist, distUnits]) => (
                         <div key={dist} style={{ marginBottom: 24 }}>
-                            <h3 className="section-title" style={{ color: 'var(--blue)', borderBottom: '1px solid var(--border)', paddingBottom: 4 }}>{dist}</h3>
+                            <h3 className="section-title" style={{
+                                color: dist === district ? 'var(--blue)' : 'var(--text-dim)',
+                                borderBottom: dist === district ? '2px solid var(--blue)' : '1px solid var(--border)',
+                                paddingBottom: 4,
+                                display: 'flex',
+                                justifyContent: 'space-between'
+                            }}>
+                                <span>{dist}</span>
+                                {dist === district && <span style={{ fontSize: 10, background: 'var(--blue)', color: 'white', padding: '2px 8px', borderRadius: 10 }}>My District</span>}
+                            </h3>
                             <div className="unit-grid">
                                 {distUnits.map(u => (
                                     <div className="unit-card" key={u.id} onClick={() => nav(`/officers?unit=${encodeURIComponent(u.name)}`)}>
@@ -75,17 +77,6 @@ export default function UnitList() {
                             </div>
                         </div>
                     ))
-                ) : units.length === 0 ? (
-                    <div className="empty-text">No active units found for this district.</div>
-                ) : (
-                    <div className="unit-grid">
-                        {units.map(u => (
-                            <div className="unit-card" key={u.id} onClick={() => nav(`/officers?unit=${encodeURIComponent(u.name)}`)}>
-                                <div className="unit-name">{u.name}</div>
-                                <div className="unit-type">{u.type}</div>
-                            </div>
-                        ))}
-                    </div>
                 )}
             </div>
         </div>

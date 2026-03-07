@@ -30,6 +30,7 @@ export default function Dashboard() {
           });
           setStats(totals);
         } else {
+          const snap = await getDoc(doc(db, "districts", district));
           if (snap.exists()) {
             setStats(snap.data().stats || { total: 0, male: 0, female: 0, units: 0, onLeave: 0 });
           } else {
@@ -87,6 +88,10 @@ export default function Dashboard() {
               <div className="stat-num">{stats.female}</div>
               <div className="stat-label">Female Officers</div>
             </div>
+            <div className={`stat-card orange ${district === "Overall" ? "no-click" : ""}`} onClick={() => district !== "Overall" && nav("/officers?status=On+Leave")}>
+              <div className="stat-num" style={{ color: 'var(--orange)' }}>{stats.onLeave}</div>
+              <div className="stat-label">On Leave</div>
+            </div>
             <div className="stat-card orange" onClick={() => nav("/units")}>
               <div className="stat-num">{stats.units}</div>
               <div className="stat-label">Active Units</div>
@@ -110,6 +115,10 @@ export default function Dashboard() {
             <button className="action-card" onClick={() => nav("/officers/add")} disabled={district === "Overall"}>
               <span className="action-icon">➕</span>
               <span>Add Officer</span>
+            </button>
+            <button className="action-card" onClick={() => nav("/officers?status=On+Leave")}>
+              <span className="action-icon">🛌</span>
+              <span>Leave Records</span>
             </button>
             <button className="action-card" onClick={() => nav("/lists")}>
               <span className="action-icon">📋</span>
