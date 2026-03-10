@@ -5,9 +5,6 @@ import { collection as fireCollection, query as fireQuery, where as fireWhere, g
 
 /**
  * Updates the unit name in all officer records for a given district.
- * @param {string} oldName 
- * @param {string} newName 
- * @param {string} district 
  */
 export async function updateUnitGlobally(oldName, newName, district) {
     try {
@@ -18,11 +15,9 @@ export async function updateUnitGlobally(oldName, newName, district) {
         );
         const snap = await fireGetDocs(q);
         const batch = fireWriteBatch(db);
-
         snap.docs.forEach(d => {
             batch.update(fireDoc(db, "officers", d.id), { unit: newName });
         });
-
         await batch.commit();
         console.log(`Updated ${snap.size} officers from ${oldName} to ${newName}`);
     } catch (err) {
@@ -33,8 +28,6 @@ export async function updateUnitGlobally(oldName, newName, district) {
 
 /**
  * Removes the unit name (sets to empty) in all officer records for a given district.
- * @param {string} unitName 
- * @param {string} district 
  */
 export async function removeUnitGlobally(unitName, district) {
     try {
@@ -45,15 +38,61 @@ export async function removeUnitGlobally(unitName, district) {
         );
         const snap = await fireGetDocs(q);
         const batch = fireWriteBatch(db);
-
         snap.docs.forEach(d => {
             batch.update(fireDoc(db, "officers", d.id), { unit: "" });
         });
-
         await batch.commit();
         console.log(`Removed unit ${unitName} from ${snap.size} officers`);
     } catch (err) {
         console.error("Error in removeUnitGlobally:", err);
+        throw err;
+    }
+}
+
+/**
+ * Updates the subUnit name in all officer records for a given unit & district.
+ */
+export async function updateSubUnitGlobally(unitName, oldSubUnit, newSubUnit, district) {
+    try {
+        const q = fireQuery(
+            fireCollection(db, "officers"),
+            fireWhere("district", "==", district),
+            fireWhere("unit", "==", unitName),
+            fireWhere("subUnit", "==", oldSubUnit)
+        );
+        const snap = await fireGetDocs(q);
+        const batch = fireWriteBatch(db);
+        snap.docs.forEach(d => {
+            batch.update(fireDoc(db, "officers", d.id), { subUnit: newSubUnit });
+        });
+        await batch.commit();
+        console.log(`Updated ${snap.size} officers subUnit from ${oldSubUnit} to ${newSubUnit}`);
+    } catch (err) {
+        console.error("Error in updateSubUnitGlobally:", err);
+        throw err;
+    }
+}
+
+/**
+ * Removes the subUnit (sets to empty) in all officer records for a given unit & district.
+ */
+export async function removeSubUnitGlobally(unitName, subUnitName, district) {
+    try {
+        const q = fireQuery(
+            fireCollection(db, "officers"),
+            fireWhere("district", "==", district),
+            fireWhere("unit", "==", unitName),
+            fireWhere("subUnit", "==", subUnitName)
+        );
+        const snap = await fireGetDocs(q);
+        const batch = fireWriteBatch(db);
+        snap.docs.forEach(d => {
+            batch.update(fireDoc(db, "officers", d.id), { subUnit: "" });
+        });
+        await batch.commit();
+        console.log(`Removed subUnit ${subUnitName} from ${snap.size} officers`);
+    } catch (err) {
+        console.error("Error in removeSubUnitGlobally:", err);
         throw err;
     }
 }

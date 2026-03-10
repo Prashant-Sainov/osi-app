@@ -71,9 +71,8 @@ export default function OfficerDetail() {
         <div className="section-card">
           <h3 className="section-head">📍 Posting</h3>
           <Row label="District" value={o.district} />
-          <Row label="Type of Unit" value={o.typeOfUnit} />
           <Row label="Unit" value={o.unit} />
-          <Row label="Sub Unit" value={o.subUnit} />
+          <Row label="Sub-Unit" value={o.subUnit} />
           <Row label="Date of Posting" value={o.dop} />
           <Row label="Role 1" value={o.role1} />
           <Row label="Role 2" value={o.role2} />

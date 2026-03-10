@@ -12,6 +12,9 @@ import CustomLists from "./pages/CustomLists";
 import CustomListDetail from "./pages/CustomListDetail";
 import AdminUsers from "./pages/AdminUsers";
 import UnitList from "./pages/UnitList";
+import ChitthaList from "./pages/ChitthaList";
+import ChitthaEditor from "./pages/ChitthaEditor";
+import ChitthaView from "./pages/ChitthaView";
 import "./index.css";
 
 export default function App() {
@@ -49,6 +52,10 @@ export default function App() {
           <Route path="/lists/:id" element={user ? <CustomListDetail /> : <Navigate to="/login" />} />
           <Route path="/admin/users" element={user ? <AdminUsers /> : <Navigate to="/login" />} />
           <Route path="/units" element={user ? <UnitList /> : <Navigate to="/login" />} />
+          <Route path="/chitthas" element={user ? <ChitthaList /> : <Navigate to="/login" />} />
+          <Route path="/chitthas/new" element={user ? <ChitthaEditor /> : <Navigate to="/login" />} />
+          <Route path="/chitthas/edit/:id" element={user ? <ChitthaEditor /> : <Navigate to="/login" />} />
+          <Route path="/chitthas/:id" element={user ? <ChitthaView /> : <Navigate to="/login" />} />
         </Routes>
       </DistrictProvider>
     </Router>

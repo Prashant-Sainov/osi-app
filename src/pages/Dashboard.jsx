@@ -100,7 +100,7 @@ export default function Dashboard() {
         )}
 
         {district === "Overall" && (
-          <div style={{ background: 'var(--blue-bg)', padding: 14, borderRadius: 12, marginBottom: 20, fontSize: 13, color: 'var(--blue)', fontWeight: 600 }}>
+          <div className="tip-box">
             💡 Tip: Switch to a specific district using the dropdown above to manage individual officer records.
           </div>
         )}
@@ -115,6 +115,10 @@ export default function Dashboard() {
             <button className="action-card" onClick={() => nav("/officers/add")} disabled={district === "Overall"}>
               <span className="action-icon">➕</span>
               <span>Add Officer</span>
+            </button>
+            <button className="action-card" onClick={() => nav("/chitthas")} disabled={district === "Overall"}>
+              <span className="action-icon">📝</span>
+              <span>Naukari Chittha</span>
             </button>
             <button className="action-card" onClick={() => nav("/officers?status=On+Leave")}>
               <span className="action-icon">🛌</span>

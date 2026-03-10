@@ -53,5 +53,17 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
+
+    // Chitthas (Duty Rosters) collection
+    match /chitthas/{chitthaId} {
+      allow read: if request.auth != null && (
+        isAdmin() ||
+        (resource == null ? request.resource.data.district : resource.data.district) == getUserData().district
+      );
+      allow write: if request.auth != null && (
+        isAdmin() ||
+        (resource == null ? request.resource.data.district : resource.data.district) == getUserData().district
+      );
+    }
   }
 }

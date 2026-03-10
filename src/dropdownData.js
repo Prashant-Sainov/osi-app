@@ -21,43 +21,6 @@ export const DROPDOWNS = {
     "Permanent (With Order)","Permanent (Without Order)",
     "Temporary (With Order)","Temporary (Without Order)"
   ],
-  typeOfUnit: [
-    "1. Police Stations","2. Traffic","3. Special Staffs",
-    "4. Court","5. Administrative Units","6. Security",
-    "7. Temp_Dep_Trg"
-  ],
-  unit: {
-    "1. Police Stations": [
-      "PS ADAMPUR","PS AGROHA","PS AZAD NAGAR HISAR",
-      "PS BARWALA","PS CITY HISAR","PS CIVIL LINES HISAR",
-      "PS CYBER CRIME HISAR","PS HTM HISAR","PS SADAR SADAR",
-      "PS UKLANA","PS URBAN ESTATE HISAR","PS WOMEN POLICE STATION HISAR"
-    ],
-    "2. Traffic": [
-      "Challaning Branch (HSR)","Challaning Branch (BRWL)",
-      "PS TRAFFIC HISAR","TRAFFIC BARWALA","TRAFFIC HISAR"
-    ],
-    "3. Special Staffs": [
-      "ANC","ABVT STAFF BARWALA","CIA HISAR","EOW",
-      "Missing Person Cell","PO STAFF","SIU BRWL","SPL STAFF"
-    ],
-    "4. Court": [
-      "ADR Centre","Couple Protection Cell","Court Security",
-      "Head Proficient","Judicial Lockup","Naib Court",
-      "Naib Court (Civil)","Pairvi Cell","Prisoner Escort Guard",
-      "Summon Staff"
-    ],
-    "5. Administrative Units": [
-      "DPO","GO Staffs","Police Lines"
-    ],
-    "6. Security": [
-      "Gunmen","Standing Guard"
-    ],
-    "7. Temp_Dep_Trg": [
-      "Deputation","Temporary Posting (with order)",
-      "Temporary Posting (without order)","Training Courses"
-    ]
-  },
   role1: [
     "A. Inv Wing (Male)","B. Inv Wing (Female)","C. MHC Staff",
     "D. MM Staff","E. General Duty","F. Dial 112",
@@ -100,3 +63,97 @@ export const DROPDOWNS = {
     "SHARMA","TELI","THAKUR","YADAV"
   ]
 };
+
+// New Unit → Sub-Unit hierarchy (replaces old typeOfUnit + unit system)
+export const UNIT_SUBUNITS = {
+  "Crime Units": [
+    "CIA Hisar",
+    "SPL Staff",
+    "ABVT Staff Barwala",
+    "ANC"
+  ],
+  "Police Lines Branch": [
+    "1st IRB Coy.",
+    "3rd BN HAP Coy.",
+    "Cow Catcher Staff",
+    "Line Present",
+    "QRT",
+    "SWAT",
+    "Swimmer",
+    "Temporary Duty",
+    "Training/Courses (more than 30 days)",
+    "Deputation",
+    "EL/EOL",
+    "Maternity Leave/CCL",
+    "Suspend",
+    "Absent"
+  ],
+  "Police Lines Establishment": [
+    "Armourer",
+    "Bugler",
+    "CDI",
+    "CHC",
+    "District Training School",
+    "Dog Squad",
+    "DS Coy",
+    "GO Mess",
+    "Kot",
+    "Line Officer",
+    "MHC Staff",
+    "MI Office",
+    "NGO/ORs Mess",
+    "Pharmacist",
+    "Police Canteen",
+    "Recruits at Police Lines",
+    "TASI"
+  ],
+  "DPO": [
+    "Accounts Branch",
+    "Arms License Branch",
+    "Challaning Branch Hisar",
+    "Community Policing Cell",
+    "Complaint Branch",
+    "Cyber Surveillance Cell",
+    "DCRB",
+    "DDA Branch",
+    "DI Branch",
+    "Draftsman",
+    "English Branch",
+    "Feedback Cell",
+    "IT Branch",
+    "NDPS Cell",
+    "OASI Branch",
+    "PA SP Hisar",
+    "Police Control Room",
+    "Police Suvidha Kendra",
+    "PRO & Photographer",
+    "Reader (SP)",
+    "Reader (Addl. SP)",
+    "Reader (DSP Hq)",
+    "Reader (DSP Women Safety)",
+    "Road Safety Cell",
+    "RTI Branch",
+    "Scrutiny Cell",
+    "Security Branch",
+    "Steno Branch",
+    "Talfi Mohrar",
+    "Telephone duty",
+    "VDC",
+    "VRK",
+    "Welfare Branch",
+    "Women Safety and Social Justice Cell (office team)"
+  ]
+};
+
+// Helper: get all unit names as a flat array
+export const ALL_UNIT_NAMES = Object.keys(UNIT_SUBUNITS);
+
+// Helper: get all sub-units for a given unit
+export function getSubUnits(unitName) {
+  return UNIT_SUBUNITS[unitName] || [];
+}
+
+// Helper: get all sub-units as a flat array
+export function getAllSubUnits() {
+  return Object.values(UNIT_SUBUNITS).flat();
+}

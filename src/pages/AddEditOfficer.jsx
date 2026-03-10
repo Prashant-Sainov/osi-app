@@ -30,7 +30,7 @@ export default function AddEditOfficer() {
     name: "", badgeNo: "", mobile: "", rank: "", gender: "",
     religion: "", caste: "", category: "", cadre: "",
     permanentTemporary: "", dob: "", doe: "", dor: "", dop: "",
-    typeOfUnit: "", unit: "", subUnit: "", role1: "", role2: "",
+    unit: "", subUnit: "", role1: "", role2: "",
     homeDistrict: "", village: "", ps: "", education: "",
     subject: "", postGrad: "", subject2: "", fatherName: "",
     io: "", remarks: "", swatCourse: "", status: "Active"
@@ -44,7 +44,7 @@ export default function AddEditOfficer() {
       try {
         const q = query(collection(db, "units"), where("district", "==", district));
         const snap = await getDocs(q);
-        setAllUnits(snap.docs.map(d => d.data()));
+        setAllUnits(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (err) {
         console.error("Error loading units", err);
       }
@@ -55,7 +55,7 @@ export default function AddEditOfficer() {
   useEffect(() => {
     if (isEdit) {
       getDoc(doc(db, "officers", id)).then(d => {
-        if (d.exists()) setForm({ ...form, ...d.data() });
+        if (d.exists()) setForm(f => ({ ...f, ...d.data() }));
       });
     }
   }, [id]);
@@ -68,30 +68,22 @@ export default function AddEditOfficer() {
     setSaving(true);
     try {
       if (isEdit) {
-        const updateData = {
+        await updateDoc(doc(db, "officers", id), {
           ...form,
           _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile)
-        };
-        await updateDoc(doc(db, "officers", id), updateData);
+        });
       } else {
-        // Auto-set district on new officer
         const officerData = {
           ...form,
-          district: district,
+          district,
           createdAt: new Date().toISOString(),
           _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile)
         };
         await addDoc(collection(db, "officers"), officerData);
-
-        // Update district stats (increment total + gender count)
         const statsUpdate = { "stats.total": increment(1) };
         if (form.gender === "Male") statsUpdate["stats.male"] = increment(1);
         if (form.gender === "Female") statsUpdate["stats.female"] = increment(1);
-        try {
-          await updateDoc(doc(db, "districts", district), statsUpdate);
-        } catch (e) {
-          // Stats update failed, non-critical
-        }
+        try { await updateDoc(doc(db, "districts", district), statsUpdate); } catch (e) {}
       }
       nav("/officers");
     } catch (err) {
@@ -100,9 +92,9 @@ export default function AddEditOfficer() {
     setSaving(false);
   };
 
-  const unitOptions = form.typeOfUnit
-    ? allUnits.filter(u => u.type === form.typeOfUnit).map(u => u.name)
-    : [];
+  // Get sub-units for the selected unit
+  const selectedUnit = allUnits.find(u => u.name === form.unit);
+  const subUnitOptions = selectedUnit?.subUnits || [];
 
   return (
     <div className="page">
@@ -113,36 +105,38 @@ export default function AddEditOfficer() {
       </div>
 
       <div className="page-content">
-        {district && (
-          <div className="district-badge">
-            📍 {district} District
-          </div>
-        )}
+        {district && <div className="district-badge">📍 {district} District</div>}
 
         <form onSubmit={save}>
           <div className="section-card">
             <h3 className="section-head">👤 Basic Information</h3>
-            <Field label="Full Name *">
-              <input className="field-input" value={form.name}
-                onChange={e => set("name", e.target.value)} placeholder="Enter full name" required />
-            </Field>
-            <Field label="Belt No">
-              <input className="field-input" value={form.badgeNo}
-                onChange={e => set("badgeNo", e.target.value)} placeholder="e.g. 1828/HSR (Belt Number)" />
-            </Field>
-            <Field label="Status">
-              <Sel value={form.status} onChange={v => set("status", v)} options={["Active", "On Leave"]} />
-            </Field>
-            <Field label="Mobile Number">
-              <input className="field-input" type="tel" value={form.mobile}
-                onChange={e => set("mobile", e.target.value)} placeholder="10-digit mobile" />
-            </Field>
-            <Field label="Rank">
-              <Sel value={form.rank} onChange={v => set("rank", v)} options={DROPDOWNS.rank} />
-            </Field>
-            <Field label="Gender">
-              <Sel value={form.gender} onChange={v => set("gender", v)} options={DROPDOWNS.gender} />
-            </Field>
+            <div className="form-row">
+              <Field label="Full Name *">
+                <input className="field-input" value={form.name}
+                  onChange={e => set("name", e.target.value)} placeholder="Enter full name" required />
+              </Field>
+              <Field label="Belt No">
+                <input className="field-input" value={form.badgeNo}
+                  onChange={e => set("badgeNo", e.target.value)} placeholder="e.g. 1828/HSR" />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Status">
+                <Sel value={form.status} onChange={v => set("status", v)} options={["Active", "On Leave"]} />
+              </Field>
+              <Field label="Mobile Number">
+                <input className="field-input" type="tel" value={form.mobile}
+                  onChange={e => set("mobile", e.target.value)} placeholder="10-digit mobile" />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Rank">
+                <Sel value={form.rank} onChange={v => set("rank", v)} options={DROPDOWNS.rank} />
+              </Field>
+              <Field label="Gender">
+                <Sel value={form.gender} onChange={v => set("gender", v)} options={DROPDOWNS.gender} />
+              </Field>
+            </div>
             <Field label="Father's Name">
               <input className="field-input" value={form.fatherName}
                 onChange={e => set("fatherName", e.target.value)} placeholder="Father's name" />
@@ -151,93 +145,109 @@ export default function AddEditOfficer() {
 
           <div className="section-card">
             <h3 className="section-head">📋 Personal Details</h3>
-            <Field label="Religion">
-              <Sel value={form.religion} onChange={v => set("religion", v)} options={DROPDOWNS.religion} />
-            </Field>
-            <Field label="Caste">
-              <Sel value={form.caste} onChange={v => set("caste", v)} options={DROPDOWNS.caste} />
-            </Field>
-            <Field label="Category">
-              <Sel value={form.category} onChange={v => set("category", v)} options={DROPDOWNS.category} />
-            </Field>
-            <Field label="Date of Birth">
-              <input className="field-input" type="date" value={form.dob}
-                onChange={e => set("dob", e.target.value)} />
-            </Field>
-            <Field label="Home District">
-              <Sel value={form.homeDistrict} onChange={v => set("homeDistrict", v)} options={DROPDOWNS.homeDistrict} />
-            </Field>
-            <Field label="Village / Town">
-              <input className="field-input" value={form.village}
-                onChange={e => set("village", e.target.value)} placeholder="Village or town" />
-            </Field>
+            <div className="form-row">
+              <Field label="Religion">
+                <Sel value={form.religion} onChange={v => set("religion", v)} options={DROPDOWNS.religion} />
+              </Field>
+              <Field label="Caste">
+                <Sel value={form.caste} onChange={v => set("caste", v)} options={DROPDOWNS.caste} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Category">
+                <Sel value={form.category} onChange={v => set("category", v)} options={DROPDOWNS.category} />
+              </Field>
+              <Field label="Date of Birth">
+                <input className="field-input" type="date" value={form.dob}
+                  onChange={e => set("dob", e.target.value)} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Home District">
+                <Sel value={form.homeDistrict} onChange={v => set("homeDistrict", v)} options={DROPDOWNS.homeDistrict} />
+              </Field>
+              <Field label="Village / Town">
+                <input className="field-input" value={form.village}
+                  onChange={e => set("village", e.target.value)} placeholder="Village or town" />
+              </Field>
+            </div>
           </div>
 
           <div className="section-card">
             <h3 className="section-head">🎓 Education</h3>
-            <Field label="Graduation or Below">
-              <Sel value={form.education} onChange={v => set("education", v)} options={DROPDOWNS.education} />
-            </Field>
-            <Field label="Subject">
-              <input className="field-input" value={form.subject}
-                onChange={e => set("subject", e.target.value)} placeholder="Subject (optional)" />
-            </Field>
-            <Field label="Post Graduation">
-              <Sel value={form.postGrad} onChange={v => set("postGrad", v)}
-                options={["LLM", "M.Com", "M.Phil", "M.Sc", "M.Tech", "MA", "MBA", "MCA", "PhD"]} />
-            </Field>
-            <Field label="Post Graduation Subject">
-              <input className="field-input" value={form.subject2}
-                onChange={e => set("subject2", e.target.value)} placeholder="Subject of post graduation" />
-            </Field>
+            <div className="form-row">
+              <Field label="Graduation or Below">
+                <Sel value={form.education} onChange={v => set("education", v)} options={DROPDOWNS.education} />
+              </Field>
+              <Field label="Subject">
+                <input className="field-input" value={form.subject}
+                  onChange={e => set("subject", e.target.value)} placeholder="Subject (optional)" />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Post Graduation">
+                <Sel value={form.postGrad} onChange={v => set("postGrad", v)}
+                  options={["LLM", "M.Com", "M.Phil", "M.Sc", "M.Tech", "MA", "MBA", "MCA", "PhD"]} />
+              </Field>
+              <Field label="Post Grad Subject">
+                <input className="field-input" value={form.subject2}
+                  onChange={e => set("subject2", e.target.value)} placeholder="Subject of post graduation" />
+              </Field>
+            </div>
           </div>
 
           <div className="section-card">
             <h3 className="section-head">🏢 Service Details</h3>
-            <Field label="Cadre">
-              <Sel value={form.cadre} onChange={v => set("cadre", v)} options={DROPDOWNS.cadre} />
-            </Field>
-            <Field label="Permanent / Temporary">
-              <Sel value={form.permanentTemporary} onChange={v => set("permanentTemporary", v)} options={DROPDOWNS.permanentTemporary} />
-            </Field>
-            <Field label="Date of Enrollment">
-              <input className="field-input" type="date" value={form.doe}
-                onChange={e => set("doe", e.target.value)} />
-            </Field>
-            <Field label="Date of Retirement">
-              <input className="field-input" type="date" value={form.dor}
-                onChange={e => set("dor", e.target.value)} />
-            </Field>
+            <div className="form-row">
+              <Field label="Cadre">
+                <Sel value={form.cadre} onChange={v => set("cadre", v)} options={DROPDOWNS.cadre} />
+              </Field>
+              <Field label="Permanent / Temporary">
+                <Sel value={form.permanentTemporary} onChange={v => set("permanentTemporary", v)} options={DROPDOWNS.permanentTemporary} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Date of Enrollment">
+                <input className="field-input" type="date" value={form.doe}
+                  onChange={e => set("doe", e.target.value)} />
+              </Field>
+              <Field label="Date of Retirement">
+                <input className="field-input" type="date" value={form.dor}
+                  onChange={e => set("dor", e.target.value)} />
+              </Field>
+            </div>
           </div>
 
           <div className="section-card">
             <h3 className="section-head">📍 Current Posting</h3>
-            <Field label="Type of Unit">
-              <Sel value={form.typeOfUnit} onChange={v => { set("typeOfUnit", v); set("unit", ""); }}
-                options={DROPDOWNS.typeOfUnit} />
-            </Field>
-            <Field label="Unit">
-              <Sel value={form.unit} onChange={v => set("unit", v)} options={unitOptions}
-                placeholder={form.typeOfUnit ? "Select unit..." : "Select type first"} />
-            </Field>
-            <Field label="Sub Unit">
-              <input className="field-input" value={form.subUnit}
-                onChange={e => set("subUnit", e.target.value)} placeholder="Sub unit name" />
-            </Field>
-            <Field label="Date of Posting">
-              <input className="field-input" type="date" value={form.dop}
-                onChange={e => set("dop", e.target.value)} />
-            </Field>
-            <Field label="Role 1">
-              <Sel value={form.role1} onChange={v => set("role1", v)} options={DROPDOWNS.role1} />
-            </Field>
-            <Field label="Role 2 (Designation)">
-              <input className="field-input" value={form.role2}
-                onChange={e => set("role2", e.target.value)} placeholder="e.g. SHO, I/C, Head Clerk" />
-            </Field>
-            <Field label="IO (Investigating Officer)">
-              <Sel value={form.io} onChange={v => set("io", v)} options={["Yes", "No"]} />
-            </Field>
+            <div className="form-row">
+              <Field label="Unit">
+                <Sel value={form.unit} onChange={v => { set("unit", v); set("subUnit", ""); }}
+                  options={allUnits.map(u => u.name)} placeholder="Select unit..." />
+              </Field>
+              <Field label="Sub-Unit">
+                <Sel value={form.subUnit} onChange={v => set("subUnit", v)} options={subUnitOptions}
+                  placeholder={form.unit ? "Select sub-unit..." : "Select unit first"} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Date of Posting">
+                <input className="field-input" type="date" value={form.dop}
+                  onChange={e => set("dop", e.target.value)} />
+              </Field>
+              <Field label="Role 1">
+                <Sel value={form.role1} onChange={v => set("role1", v)} options={DROPDOWNS.role1} />
+              </Field>
+            </div>
+            <div className="form-row">
+              <Field label="Role 2 (Designation)">
+                <input className="field-input" value={form.role2}
+                  onChange={e => set("role2", e.target.value)} placeholder="e.g. SHO, I/C, Head Clerk" />
+              </Field>
+              <Field label="IO (Investigating Officer)">
+                <Sel value={form.io} onChange={v => set("io", v)} options={["Yes", "No"]} />
+              </Field>
+            </div>
           </div>
 
           <div className="section-card">
