@@ -11,6 +11,7 @@ const UNIT_ICONS = {
   "Police Lines Branch": { icon: "🏛️", cls: "lines-branch" },
   "Police Lines Establishment": { icon: "🏢", cls: "lines-est" },
   "DPO": { icon: "⚙️", cls: "dpo" },
+  "Police Station": { icon: "👮", cls: "police-station" },
 };
 
 export default function UnitList() {
@@ -50,16 +51,22 @@ export default function UnitList() {
 
   // ── Admin: Seed default units from UNIT_SUBUNITS ──
   const seedDefaults = async () => {
-    if (!window.confirm("Import all default units and sub-units into " + district + "?")) return;
+    const isReset = window.confirm("Do you want to DELETE ALL existing units before importing? (Recommended for clean overhaul)");
     setLoading(true);
     try {
+      if (isReset) {
+        const oldSnap = await getDocs(collection(db, "units"), where("district", "==", district));
+        for (const d of oldSnap.docs) { await deleteDoc(doc(db, "units", d.id)); }
+      }
+      
       let count = 0;
       for (const [name, subs] of Object.entries(UNIT_SUBUNITS)) {
         await addDoc(collection(db, "units"), { name, subUnits: subs, district });
         count++;
       }
       try {
-        await updateDoc(doc(db, "districts", district), { "stats.units": increment(count) });
+        const statsUpdate = isReset ? { "stats.units": count } : { "stats.units": increment(count) };
+        await updateDoc(doc(db, "districts", district), statsUpdate);
       } catch (e) {}
       alert(`Imported ${count} units with sub-units into ${district}!`);
       loadUnits();

@@ -16,8 +16,21 @@ export default function ChitthaEditor() {
 
   // Chittha state
   const [unitName, setUnitName] = useState("");
+  const formatDateLabel = (dStr) => {
+    if (!dStr) return "";
+    const today = new Date(dStr);
+    const tmrw = new Date(dStr);
+    tmrw.setDate(tmrw.getDate() + 1);
+    const formatDt = (dt) => {
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      return `${dd}.${mm}.${dt.getFullYear()}`;
+    };
+    return `${formatDt(today)} to ${formatDt(tmrw)}`;
+  };
+
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [dateLabel, setDateLabel] = useState("");
+  const [dateLabel, setDateLabel] = useState(formatDateLabel(new Date().toISOString().split("T")[0]));
   const [headSummary, setHeadSummary] = useState([
     { head: "Police Official", totalPosted: 0, absent: 0, leave: 0, present: 0 },
     { head: "SPO", totalPosted: 0, absent: 0, leave: 0, present: 0 },
@@ -115,7 +128,10 @@ export default function ChitthaEditor() {
 
   // Section helpers
   const addSection = () => {
-    if (!addingSectionName.trim()) return;
+    if (!addingSectionName.trim()) {
+      alert("Please enter a table name (e.g. SHO, Investigation, PCR...)");
+      return;
+    }
     setSections(prev => [...prev, { title: addingSectionName.trim(), entries: [] }]);
     setAddingSectionName("");
   };
@@ -173,11 +189,11 @@ export default function ChitthaEditor() {
   };
 
   const filteredPickers = allOfficers.filter(o => {
-    const term = pickerSearch.toLowerCase();
+    const term = pickerSearch.toLowerCase().trim();
     if (!term) return true;
-    return (o.name || "").toLowerCase().includes(term) ||
-      (o.badgeNo || "").toLowerCase().includes(term) ||
-      (o.rank || "").toLowerCase().includes(term);
+    const words = term.split(/[\s-]+/).filter(w => w.length > 0);
+    const text = `${o.name || ""} ${o.badgeNo || ""} ${o.rank || ""} ${o.mobile || ""}`.toLowerCase();
+    return words.every(w => text.includes(w));
   }).slice(0, 50);
 
   return (
@@ -204,7 +220,14 @@ export default function ChitthaEditor() {
             </div>
             <div className="field-group">
               <label className="field-label">Date</label>
-              <input className="field-input" type="date" value={date} onChange={e => setDate(e.target.value)} />
+              <input className="field-input" type="date" value={date} onChange={e => {
+                const newDate = e.target.value;
+                setDate(newDate);
+                // Auto-update date label if it hasn't been heavily customized by user
+                if (dateLabel === formatDateLabel(date) || !dateLabel) {
+                  setDateLabel(formatDateLabel(newDate));
+                }
+              }} />
             </div>
           </div>
           <div className="field-group">

@@ -72,7 +72,7 @@ export default function AdminUsers() {
       let count = 0;
       snap.docs.forEach(d => {
         const data = d.data();
-        batch.update(doc(db, "officers", d.id), { _searchGrams: generateSearchGrams(data.name, data.badgeNo, data.mobile) });
+        batch.update(doc(db, "officers", d.id), { _searchGrams: generateSearchGrams(data.name, data.badgeNo, data.mobile, data.rank) });
         count++;
       });
       await batch.commit();

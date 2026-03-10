@@ -1,5 +1,5 @@
-export function generateSearchGrams(name = "", badge = "", mobile = "") {
-    const input = `${name} ${badge} ${mobile}`.toLowerCase().trim();
+export function generateSearchGrams(name = "", badge = "", mobile = "", rank = "") {
+    const input = `${name} ${badge} ${mobile} ${rank}`.toLowerCase().trim();
     const words = input.split(/[\s-]+/).filter(w => w.length > 0);
     const grams = new Set();
 

@@ -11,6 +11,9 @@ export default function ChitthaList() {
   const [filterUnit, setFilterUnit] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [units, setUnits] = useState([]);
+  const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [chitthaToCopy, setChitthaToCopy] = useState(null);
+  const [newCopyName, setNewCopyName] = useState("");
   const nav = useNavigate();
 
   useEffect(() => {
@@ -41,7 +44,8 @@ export default function ChitthaList() {
     setLoading(false);
   };
 
-  const deleteChittha = async (id, label) => {
+  const deleteChittha = async (e, id, label) => {
+    e.stopPropagation();
     if (!window.confirm(`Delete chittha "${label}"?`)) return;
     try {
       await deleteDoc(doc(db, "chitthas", id));
@@ -49,19 +53,55 @@ export default function ChitthaList() {
     } catch (err) { alert("Error: " + err.message); }
   };
 
-  const copyChittha = async (chittha) => {
+  const openCopyModal = (e, chittha) => {
+    e.stopPropagation();
+    setChitthaToCopy(chittha);
+    setNewCopyName(chittha.unitName);
+    setCopyModalOpen(true);
+  };
+
+  const handleCopySubmit = async () => {
+    if (!newCopyName.trim()) return;
     const today = new Date().toISOString().split("T")[0];
-    if (!window.confirm(`Copy this chittha to today (${today})?`)) return;
+    
+    const tmrw = new Date(today);
+    tmrw.setDate(tmrw.getDate() + 1);
+    const formatDt = (dt) => {
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      return `${dd}.${mm}.${dt.getFullYear()}`;
+    };
+    const dateLbl = `${formatDt(new Date(today))} to ${formatDt(tmrw)}`;
+
+    let baseName = newCopyName.trim();
+    if (baseName.match(/ v\d+$/)) {
+      baseName = baseName.replace(/ v\d+$/, "");
+    }
+    
+    let finalName = baseName;
     try {
-      const { id, ...data } = chittha;
+      const q = query(collection(db, "chitthas"), where("district", "==", district), where("date", "==", today));
+      const snap = await getDocs(q);
+      const existingNames = snap.docs.map(d => d.data().unitName);
+      
+      let version = 2;
+      while (existingNames.includes(finalName)) {
+        finalName = `${baseName} v${version}`;
+        version++;
+      }
+      
+      const { id, ...data } = chitthaToCopy;
       const newChittha = {
         ...data,
+        unitName: finalName,
         date: today,
-        dateLabel: today,
+        dateLabel: dateLbl,
         copiedFromId: id,
         createdAt: new Date().toISOString(),
       };
+      
       const docRef = await addDoc(collection(db, "chitthas"), newChittha);
+      setCopyModalOpen(false);
       nav(`/chitthas/edit/${docRef.id}`);
     } catch (err) { alert("Error: " + err.message); }
   };
@@ -134,10 +174,10 @@ export default function ChitthaList() {
                       </div>
                     </div>
                     <div className="chittha-card-actions">
-                      <button className="chittha-action-btn" onClick={() => nav(`/chitthas/${c.id}`)}>View</button>
-                      <button className="chittha-action-btn" onClick={() => nav(`/chitthas/edit/${c.id}`)}>Edit</button>
-                      <button className="chittha-action-btn copy" onClick={() => copyChittha(c)}>📋 Copy</button>
-                      <button className="chittha-action-btn danger" onClick={() => deleteChittha(c.id, c.unitName)}>🗑️</button>
+                      <button className="chittha-action-btn" onClick={(e) => { e.stopPropagation(); nav(`/chitthas/${c.id}`); }}>View</button>
+                      <button className="chittha-action-btn" onClick={(e) => { e.stopPropagation(); nav(`/chitthas/edit/${c.id}`); }}>Edit</button>
+                      <button className="chittha-action-btn copy" onClick={(e) => openCopyModal(e, c)}>📋 Copy</button>
+                      <button className="chittha-action-btn danger" onClick={(e) => deleteChittha(e, c.id, c.unitName)}>🗑️</button>
                     </div>
                   </div>
                 ))}
@@ -146,6 +186,20 @@ export default function ChitthaList() {
           ))
         )}
       </div>
+
+      {copyModalOpen && (
+        <div className="modal-overlay" onClick={() => setCopyModalOpen(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h2 className="modal-title">Copy Chittha to Today</h2>
+            <p className="page-sub" style={{ marginBottom: 16 }}>This will duplicate all records to today's date.</p>
+            <input className="field-input" placeholder="Unit Name (e.g. PS Azad Nagar)" value={newCopyName} onChange={e => setNewCopyName(e.target.value)} autoFocus />
+            <div className="modal-actions" style={{ marginTop: 24 }}>
+              <button className="modal-btn secondary" onClick={() => setCopyModalOpen(false)}>Cancel</button>
+              <button className="modal-btn primary" onClick={handleCopySubmit}>Create Copy</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

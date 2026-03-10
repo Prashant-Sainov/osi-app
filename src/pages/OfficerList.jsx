@@ -13,6 +13,7 @@ export default function OfficerList() {
   const [search, setSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [filterUnit, setFilterUnit] = useState("");
+  const [filterSubUnit, setFilterSubUnit] = useState("");
   const [filterRank, setFilterRank] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -61,9 +62,24 @@ export default function OfficerList() {
     if (!term) { setIsSearching(false); loadPage(false); return; }
     setFilterLoading(true); setIsSearching(true); setOfficers([]);
     try {
-      const q = query(collection(db, "officers"), where("district", "==", district), where("_searchGrams", "array-contains", term), limit(100));
+      const words = term.split(/[\s-]+/).filter(w => w.length > 0);
+      const firstWord = words[0];
+      
+      const q = query(collection(db, "officers"), where("district", "==", district), where("_searchGrams", "array-contains", firstWord), limit(200));
       const snap = await getDocs(q);
-      setOfficers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      
+      let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Filter client-side for remaining words in name, badgeNo, rank, and mobile
+      if (words.length > 1) {
+        const remainingWords = words.slice(1);
+        results = results.filter(o => {
+          const text = `${o.name || ""} ${o.badgeNo || ""} ${o.rank || ""} ${o.mobile || ""}`.toLowerCase();
+          return remainingWords.every(w => text.includes(w));
+        });
+      }
+      
+      setOfficers(results);
       setHasMore(false);
     } catch (err) { console.error("Search error:", err); }
     setFilterLoading(false);
@@ -100,6 +116,7 @@ export default function OfficerList() {
       const constraints = [where("district", "==", district)];
       if (filterRank) constraints.push(where("rank", "==", filterRank));
       if (filterUnit) constraints.push(where("unit", "==", filterUnit));
+      if (filterSubUnit) constraints.push(where("subUnit", "==", filterSubUnit));
       if (railFilter === "male") constraints.push(where("gender", "==", "Male"));
       if (railFilter === "female") constraints.push(where("gender", "==", "Female"));
       if (railFilter === "on leave") constraints.push(where("status", "==", "On Leave"));
@@ -122,10 +139,10 @@ export default function OfficerList() {
 
   useEffect(() => {
     if (!districtLoading && district && district !== "Overall") {
-      if (filterRank || filterUnit || railFilter !== "all") { setSearch(""); setIsSearching(false); loadFiltered(); }
+      if (filterRank || filterUnit || filterSubUnit || railFilter !== "all") { setSearch(""); setIsSearching(false); loadFiltered(); }
       else if (!isSearching) { setLastDoc(null); setHasMore(true); loadPage(false); }
     }
-  }, [filterRank, filterUnit, railFilter, district, districtLoading]);
+  }, [filterRank, filterUnit, filterSubUnit, railFilter, district, districtLoading]);
 
   const deleteOfficer = async (id, name) => {
     if (window.confirm(`Delete officer ${name}?`)) {
@@ -205,9 +222,13 @@ export default function OfficerList() {
               <option value="">All Ranks</option>
               {DROPDOWNS.rank.map(r => <option key={r}>{r}</option>)}
             </select>
-            <select className="filter-select" value={filterUnit} onChange={e => setFilterUnit(e.target.value)}>
+            <select className="filter-select" value={filterUnit} onChange={e => { setFilterUnit(e.target.value); setFilterSubUnit(""); }}>
               <option value="">All Units</option>
               {allUnits.map(u => <option key={u.name}>{u.name}</option>)}
+            </select>
+            <select className="filter-select" value={filterSubUnit} onChange={e => setFilterSubUnit(e.target.value)} disabled={!filterUnit}>
+              <option value="">All Sub-Units</option>
+              {allUnits.find(u => u.name === filterUnit)?.subUnits?.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
 

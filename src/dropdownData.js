@@ -142,6 +142,22 @@ export const UNIT_SUBUNITS = {
     "VRK",
     "Welfare Branch",
     "Women Safety and Social Justice Cell (office team)"
+  ],
+  "Police Station": [
+    "PS City Hisar",
+    "PS Civil Lines, Hisar",
+    "PS Sadar, Hisar",
+    "PS HTM Hisar",
+    "PS Urban Estate Hisar",
+    "PS Women, Hisar",
+    "PS Agroha",
+    "PS Adampur",
+    "PS Barwala",
+    "PS Uklana",
+    "PS City Hansi",
+    "PS Sadar Hansi",
+    "PS Bass",
+    "PS Narnaund"
   ]
 };
 

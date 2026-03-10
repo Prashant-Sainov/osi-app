@@ -68,21 +68,32 @@ export default function AddEditOfficer() {
     setSaving(true);
     try {
       if (isEdit) {
+        const oldDoc = await getDoc(doc(db, "officers", id));
+        const oldData = oldDoc.data() || {};
         await updateDoc(doc(db, "officers", id), {
           ...form,
-          _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile)
+          _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile, form.rank)
         });
+        
+        // Update stats if status changed
+        const statsUpdate = {};
+        if (oldData.status !== "On Leave" && form.status === "On Leave") statsUpdate["stats.onLeave"] = increment(1);
+        if (oldData.status === "On Leave" && form.status !== "On Leave") statsUpdate["stats.onLeave"] = increment(-1);
+        if (Object.keys(statsUpdate).length > 0) {
+          try { await updateDoc(doc(db, "districts", district), statsUpdate); } catch (e) {}
+        }
       } else {
         const officerData = {
           ...form,
           district,
           createdAt: new Date().toISOString(),
-          _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile)
+          _searchGrams: generateSearchGrams(form.name, form.badgeNo, form.mobile, form.rank)
         };
         await addDoc(collection(db, "officers"), officerData);
         const statsUpdate = { "stats.total": increment(1) };
         if (form.gender === "Male") statsUpdate["stats.male"] = increment(1);
         if (form.gender === "Female") statsUpdate["stats.female"] = increment(1);
+        if (form.status === "On Leave") statsUpdate["stats.onLeave"] = increment(1);
         try { await updateDoc(doc(db, "districts", district), statsUpdate); } catch (e) {}
       }
       nav("/officers");
