@@ -642,32 +642,48 @@ html, body {
 }
 
 /* ─── RESPONSIVE: MOBILE ─────────────────────────────────────────────── */
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .topbar { padding: 0 10px; height: 50px; }
   .topbar-title { font-size: 14px; }
   .page-content { padding: 14px 10px 32px; }
-  .stats-grid { gap: 8px; }
-  .stat-num { font-size: 28px; }
-  .left-rail { width: 62px; padding: 8px 4px; }
-  .rail-btn { padding: 8px 2px; }
-  .rail-btn .rail-num { font-size: 15px; }
-  .rail-btn .rail-label { font-size: 7px; }
-  .officer-main { padding: 10px 8px 32px; }
-  .officer-card { padding: 8px 10px; gap: 8px; border-radius: 12px; }
-  .officer-avatar { font-size: 24px; }
-  .officer-name { font-size: 13px; }
-  .officer-rank { font-size: 10px; margin-top: 0; }
-  .officer-unit { font-size: 9px; margin-top: 0; }
+  
+  /* Dashboard Stats */
+  .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px; }
+  .stat-card { padding: 14px 10px; }
+  .stat-num { font-size: 24px; }
+  .stat-label { font-size: 9px; }
+
+  /* Navigation & Layout */
+  .left-rail { display: none !important; } /* Hide sidebar on mobile */
+  .officer-page-layout { display: block !important; }
+  .officer-main { padding: 10px 8px 32px !important; max-height: none !important; }
+
+  /* Filters */
+  .filter-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+  .filter-select { width: 100% !important; height: 44px; font-size: 14px; }
+
+  /* Cards */
+  .officer-card { padding: 10px; gap: 10px; border-radius: 12px; }
+  .officer-avatar { font-size: 28px; }
+  .officer-name { font-size: 14px; }
+  .officer-rank { font-size: 11px; }
+  .officer-unit { font-size: 10px; }
+  
+  /* Units */
   .unit-accordion-header { padding: 14px; }
-  .unit-accordion-icon { width: 36px; height: 36px; font-size: 18px; }
-  .unit-accordion-title { font-size: 14px; }
-  .action-grid { grid-template-columns: 1fr 1fr; }
+  .unit-accordion-icon { width: 40px; height: 40px; font-size: 20px; }
+  .unit-accordion-title { font-size: 15px; }
+  
+  /* Action buttons */
+  .subunit-item { padding: 12px; }
+  .subunit-actions button { padding: 8px; }
+  .action-grid { grid-template-columns: 1fr 1fr !important; }
 }
 
-/* ─── RESPONSIVE: TABLET ─────────────────────────────────────────────── */
-@media (min-width: 768px) {
+/* ─── RESPONSIVE: TABLET (MOVED BREAKPOINT) ────────────────────────── */
+@media (min-width: 769px) and (max-width: 1023px) {
   .page-content { padding: 28px 32px 48px; }
-  .stats-grid { grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .action-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .unit-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .officer-main { padding: 20px 24px 48px; }

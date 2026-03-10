@@ -155,9 +155,9 @@ export default function UnitList() {
           {district === "Overall" ? "State-wide unit overview" : `${district} District — Click a unit to see its sub-units`}
         </p>
 
-        {isAdmin && units.length === 0 && !loading && (
+        {isAdmin && !loading && (
           <button className="btn-primary" onClick={seedDefaults} style={{ marginBottom: 20, width: '100%' }}>
-            ⚡ Import Default Units & Sub-Units
+            ⚡ Clean & Reset to Official Units
           </button>
         )}
 
@@ -181,11 +181,12 @@ export default function UnitList() {
                         <div className="unit-accordion-count">{subUnits.length} sub-unit{subUnits.length !== 1 ? "s" : ""}</div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="unit-accordion-actions" onClick={e => e.stopPropagation()}>
                       {isAdmin && (
                         <button
                           className="del-btn"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteUnit(u); }}
+                          style={{ marginRight: 12 }}
+                          onClick={() => handleDeleteUnit(u)}
                           title="Delete Unit"
                         >🗑️</button>
                       )}
