@@ -70,7 +70,8 @@ export const UNIT_SUBUNITS = {
     "CIA Hisar",
     "SPL Staff",
     "ABVT Staff Barwala",
-    "ANC"
+    "ANC",
+    "Economic Cell"
   ],
   "Police Lines Branch": [
     "1st IRB Coy.",
