@@ -1,6 +1,6 @@
 {
-  "name": "Hisar Police Personnel",
-  "short_name": "Hisar Police",
+  "name": "OASI Personnel Management",
+  "short_name": "OASI",
   "description": "Personnel Management System",
   "start_url": "/",
   "display": "standalone",

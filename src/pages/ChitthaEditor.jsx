@@ -51,6 +51,7 @@ export default function ChitthaEditor() {
   const [editSectionName, setEditSectionName] = useState("");
   const [addingHeadRow, setAddingHeadRow] = useState(false);
   const [newHeadName, setNewHeadName] = useState("");
+  const [pickerSelected, setPickerSelected] = useState(new Set());
 
   useEffect(() => {
     if (!district || district === "Overall") return;
@@ -149,28 +150,43 @@ export default function ChitthaEditor() {
   const openPicker = (sectionIdx) => {
     setPickerSectionIdx(sectionIdx);
     setPickerSearch("");
+    setPickerSelected(new Set());
     setPickerOpen(true);
     loadOfficers();
   };
 
-  const addOfficerEntry = (officer) => {
+  const addSelectedOfficers = () => {
+    const selectedOfficers = allOfficers.filter(o => pickerSelected.has(o.id));
     setSections(prev => prev.map((s, i) => {
       if (i !== pickerSectionIdx) return s;
-      const exists = s.entries.some(e => e.officerId === officer.id);
-      if (exists) return s;
-      return {
-        ...s,
-        entries: [...s.entries, {
-          officerId: officer.id,
-          sn: s.entries.length + 1,
-          rank: officer.rank || "",
-          name: officer.name || "",
-          beltNo: officer.badgeNo || "",
-          remarks: "",
-          mobile: officer.mobile || "",
-        }]
-      };
+      
+      const newEntries = [...s.entries];
+      selectedOfficers.forEach(officer => {
+        const exists = newEntries.some(e => e.officerId === officer.id);
+        if (!exists) {
+          newEntries.push({
+            officerId: officer.id,
+            sn: newEntries.length + 1,
+            rank: officer.rank || "",
+            name: officer.name || "",
+            beltNo: officer.badgeNo || "",
+            remarks: "",
+            mobile: officer.mobile || "",
+          });
+        }
+      });
+      return { ...s, entries: newEntries };
     }));
+    setPickerOpen(false);
+  };
+
+  const togglePickerSelection = (id) => {
+    setPickerSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const updateEntryRemark = (secIdx, entryIdx, val) => {
@@ -373,7 +389,14 @@ export default function ChitthaEditor() {
                 <div className="empty-text" style={{ padding: 20 }}>No officers found</div>
               ) : (
                 filteredPickers.map(o => (
-                  <div className="officer-picker-item" key={o.id} onClick={() => { addOfficerEntry(o); }}>
+                  <div 
+                    className={`officer-picker-item ${pickerSelected.has(o.id) ? "selected" : ""}`} 
+                    key={o.id} 
+                    onClick={() => togglePickerSelection(o.id)}
+                  >
+                    <div className={`officer-checkbox ${pickerSelected.has(o.id) ? "checked" : ""}`} style={{ marginRight: 12 }}>
+                      {pickerSelected.has(o.id) ? "✓" : ""}
+                    </div>
                     <div className="officer-avatar" style={{ fontSize: 24 }}>{o.gender === "Female" ? "👮‍♀️" : "👮"}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--navy)' }}>{o.name}</div>
@@ -384,7 +407,14 @@ export default function ChitthaEditor() {
               )}
             </div>
             <div className="modal-actions">
-              <button className="modal-btn secondary" onClick={() => setPickerOpen(false)}>Done</button>
+              <button className="modal-btn secondary" onClick={() => setPickerOpen(false)}>Cancel</button>
+              <button 
+                className="modal-btn primary" 
+                onClick={addSelectedOfficers}
+                disabled={pickerSelected.size === 0}
+              >
+                Add {pickerSelected.size > 0 ? `${pickerSelected.size} ` : ""}Selected
+              </button>
             </div>
           </div>
         </div>

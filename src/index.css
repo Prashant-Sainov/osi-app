@@ -678,6 +678,29 @@ html, body {
   .subunit-item { padding: 12px; }
   .subunit-actions button { padding: 8px; }
   .action-grid { grid-template-columns: 1fr 1fr !important; }
+
+  /* Chithha Cards Mobile (50/50) */
+  .chittha-card { flex-direction: column !important; align-items: stretch !important; padding: 0 !important; overflow: hidden; }
+  .chittha-card-icon { display: none; }
+  .chittha-card-info { padding: 16px; border-bottom: 1px solid var(--bg2); }
+  .chittha-card-title { font-size: 16px; }
+  .chittha-card-meta { font-size: 12px; }
+  .chittha-card-actions { 
+    display: grid !important; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 0 !important; 
+    border-top: 1px solid var(--border);
+  }
+  .chittha-action-btn { 
+    border: none !important; 
+    border-radius: 0 !important; 
+    padding: 14px !important; 
+    font-size: 12px !important;
+    text-align: center;
+    border-right: 1px solid var(--bg2) !important;
+    border-bottom: 1px solid var(--bg2) !important;
+  }
+  .chittha-action-btn:last-child { border-right: none !important; }
 }
 
 /* ─── RESPONSIVE: TABLET (MOVED BREAKPOINT) ────────────────────────── */

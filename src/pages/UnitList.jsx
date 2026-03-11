@@ -49,32 +49,7 @@ export default function UnitList() {
 
   const toggle = (id) => setExpanded(prev => (prev === id ? null : id));
 
-  // ── Admin: Seed default units from UNIT_SUBUNITS ──
-  const seedDefaults = async () => {
-    const isReset = window.confirm("Do you want to DELETE ALL existing units before importing? (Recommended for clean overhaul)");
-    setLoading(true);
-    try {
-      if (isReset) {
-        const oldSnap = await getDocs(collection(db, "units"), where("district", "==", district));
-        for (const d of oldSnap.docs) { await deleteDoc(doc(db, "units", d.id)); }
-      }
-      
-      let count = 0;
-      for (const [name, subs] of Object.entries(UNIT_SUBUNITS)) {
-        await addDoc(collection(db, "units"), { name, subUnits: subs, district });
-        count++;
-      }
-      try {
-        const statsUpdate = isReset ? { "stats.units": count } : { "stats.units": increment(count) };
-        await updateDoc(doc(db, "districts", district), statsUpdate);
-      } catch (e) {}
-      alert(`Imported ${count} units with sub-units into ${district}!`);
-      loadUnits();
-    } catch (err) {
-      alert("Error: " + err.message);
-    }
-    setLoading(false);
-  };
+
 
   // ── Admin: Add new unit ──
   const handleAddUnit = async () => {
@@ -155,11 +130,7 @@ export default function UnitList() {
           {district === "Overall" ? "State-wide unit overview" : `${district} District — Click a unit to see its sub-units`}
         </p>
 
-        {isAdmin && !loading && (
-          <button className="btn-primary" onClick={seedDefaults} style={{ marginBottom: 20, width: '100%' }}>
-            ⚡ Clean & Reset to Official Units
-          </button>
-        )}
+
 
         {loading ? (
           <div className="loading-text">Loading units...</div>
